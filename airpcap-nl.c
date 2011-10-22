@@ -367,8 +367,13 @@ nl80211_device_init(PAirpcapHandle handle, PCHAR Ebuf)
 
     genlmsg_put(msg, NL_AUTO_PID, NL_AUTO_SEQ,
                 genl_family_get_id(handle->nl80211), 0,
-                /* dump all devices, get wireless PHY information. */
-                NLM_F_MATCH, NL80211_CMD_GET_WIPHY, 0);
+                /* Get wireless PHY information. */
+                /* Why does iw set NLM_F_DUMP here and
+                 * still get only one interface?
+                 * Even if I do NLM_F_MATCH with
+                 * NL80211_ATTR_IFINDEX, I get every
+                 * PHY.  Only 0 works here... */
+                0, NL80211_CMD_GET_WIPHY, 0);
 
     /* We refer to the device by its interface index, not by
      * the PHY interface. */
