@@ -258,7 +258,16 @@ int wiphy_dump_handler(struct nl_msg *msg, void *data)
          * get AirpcapChannelInfo array allocation size.
          * Inefficient, but we only do it once. */
         nla_for_each_nested(nl_freq, tb_band_freqs, freq_rem) {
+            nla_parse(tb_freq, NL80211_FREQUENCY_ATTR_MAX,
+                      nla_data(nl_freq),
+                      nla_len(nl_freq),
+                      freq_policy);
+            /* Ignore disabled frequencies (e.g., due to regulatory
+             * domain issues. */
+            if (tb_freq[NL80211_FREQUENCY_ATTR_DISABLED])
+                continue;
             handle->channel_info_count++;
+ 
         }
         handle->channel_info =                                          \
             (AirpcapChannelInfo *)malloc(sizeof(AirpcapChannelInfo) * handle->channel_info_count);
@@ -276,6 +285,10 @@ int wiphy_dump_handler(struct nl_msg *msg, void *data)
                       nla_len(nl_freq),
                       freq_policy);
             if (NULL == tb_freq[NL80211_FREQUENCY_ATTR_FREQ])
+                continue;
+            /* Ignore disabled frequencies (e.g., due to regulatory
+             * domain issues. */
+            if (tb_freq[NL80211_FREQUENCY_ATTR_DISABLED])
                 continue;
 
             frequency = nla_get_u32(tb_freq[NL80211_FREQUENCY_ATTR_FREQ]);
