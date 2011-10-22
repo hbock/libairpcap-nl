@@ -257,6 +257,7 @@ int wiphy_dump_handler(struct nl_msg *msg, void *data)
         /* Loop through NL80211_BAND_ATTR_FREQS once to
          * get AirpcapChannelInfo array allocation size.
          * Inefficient, but we only do it once. */
+        handle->channel_info_count = 0;
         nla_for_each_nested(nl_freq, tb_band_freqs, freq_rem) {
             nla_parse(tb_freq, NL80211_FREQUENCY_ATTR_MAX,
                       nla_data(nl_freq),
@@ -280,6 +281,8 @@ int wiphy_dump_handler(struct nl_msg *msg, void *data)
 
         freq_count = 0;
         nla_for_each_nested(nl_freq, tb_band_freqs, freq_rem) {
+            PAirpcapChannelInfo info = &handle->channel_info[freq_count];
+
             nla_parse(tb_freq, NL80211_FREQUENCY_ATTR_MAX,
                       nla_data(nl_freq),
                       nla_len(nl_freq),
@@ -292,12 +295,12 @@ int wiphy_dump_handler(struct nl_msg *msg, void *data)
                 continue;
 
             frequency = nla_get_u32(tb_freq[NL80211_FREQUENCY_ATTR_FREQ]);
-            PAirpcapChannelInfo info = &handle->channel_info[freq_count];
             info->Frequency = (UINT)frequency;
             /* TODO */
             info->ExtChannel = 0;
+            info->Flags = 0;
             /* Must be {0, 0, 0} according to airpcap docs */
-            memset(info->Reserved, 0, sizeof(CHAR) * 3);            
+            memset(info->Reserved, 0, sizeof(info->Reserved));
             
             freq_count++;
         }
@@ -366,7 +369,7 @@ nl80211_device_init(PAirpcapHandle handle, PCHAR Ebuf)
     genlmsg_put(msg, NL_AUTO_PID, NL_AUTO_SEQ,
                 genl_family_get_id(handle->nl80211), 0,
                 /* dump all devices, get wireless PHY information. */
-                NLM_F_DUMP, NL80211_CMD_GET_WIPHY, 0);
+                NLM_F_MATCH, NL80211_CMD_GET_WIPHY, 0);
 
     /* We refer to the device by its interface index, not by
      * the PHY interface. */
@@ -556,27 +559,6 @@ BOOL AirpcapTurnLedOff(PAirpcapHandle AdapterHandle UNUSED,
 {
     return FALSE;
 }
-	/*!
-
-typedef struct _AirpcapChannelInfo
-{
-	UINT Frequency;	///< Channel frequency, in MHz.
-	/*!
-		\brief 802.11n specific. Offset of the extension channel in case of 40MHz channels.
-
-		Possible values are -1, 0 +1:
-		- -1 means that the extension channel should be below the control channel (e.g. Control = 5 and Extension = 1)
-		- 0 means that no extension channel should be used (20MHz channels or legacy mode)
-		- +1 means that the extension channel should be above the control channel (e.g. Control = 1 and Extension = 5)
-
-		In case of 802.11a/b/g channels (802.11n legacy mode), this field should be set to 0.
-
-	CHAR ExtChannel;
-	UCHAR Reserved[3];	///< Reserved. It should be set to {0,0,0}.
-}
-	AirpcapChannelInfo, *PAirpcapChannelInfo;
-	*/
-
 
 BOOL AirpcapGetDeviceSupportedChannels(PAirpcapHandle AdapterHandle,
                                        PAirpcapChannelInfo *ppChannelInfo,
