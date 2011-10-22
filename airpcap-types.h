@@ -22,6 +22,7 @@ typedef unsigned int *PUINT;
 /* ULONG on Windows is 32-bit, regardless of the
  * architecture. */
 typedef uint32_t ULONG;
+typedef uint64_t ULONGLONG;
 
 typedef char CHAR;
 typedef CHAR *PCHAR;
