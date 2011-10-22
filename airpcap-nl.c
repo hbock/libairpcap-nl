@@ -223,6 +223,7 @@ int wiphy_dump_handler(struct nl_msg *msg, void *data)
     int bandidx;
     /* remaining items for nla_for_each_nested */
     int band_rem, freq_rem, rate_rem, mode_rem, cmd_rem;
+    int freq_count = 0;
 
     /* parse the generic netlink reply. */
     struct genlmsghdr *gnlh = nlmsg_data(nlmsg_hdr(msg));
@@ -243,7 +244,6 @@ int wiphy_dump_handler(struct nl_msg *msg, void *data)
 
     bandidx = 1;
     nla_for_each_nested(nl_band, tb_msg[NL80211_ATTR_WIPHY_BANDS], band_rem) {
-        int freq_count;
         uint32_t frequency;
         struct nlattr *tb_band_freqs;
 
@@ -279,7 +279,6 @@ int wiphy_dump_handler(struct nl_msg *msg, void *data)
             continue;
         }
 
-        freq_count = 0;
         nla_for_each_nested(nl_freq, tb_band_freqs, freq_rem) {
             PAirpcapChannelInfo info = &handle->channel_info[freq_count];
 
