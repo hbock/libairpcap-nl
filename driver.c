@@ -25,8 +25,20 @@ void test(PAirpcapHandle handle)
     if (TRUE == ret) {
         printf("Channels supported by this device:\n");
         for (UINT c = 0; c < channel_info_count; c++) {
-            printf("\t[%d] Frequency: %d MHz\n",
-                   c, channel_info[c].Frequency);
+            UINT frequency, channel;
+            BOOL ret;
+            frequency = channel_info[c].Frequency;
+
+            /* Ignore the band */
+            ret = AirpcapConvertFrequencyToChannel(frequency,
+                                                   &channel,
+                                                   NULL);
+            if (FALSE == ret) {
+                fprintf(stderr, "BUG: invalid frequency %d!\n", frequency);
+                continue;
+            }
+            printf("\t[%d] Frequency: %d MHz\n",  channel, frequency);
+            
             if (0 != channel_info[c].ExtChannel) {
                 printf("\tExtension channel info:\n");
             } else {

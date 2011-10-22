@@ -578,15 +578,41 @@ BOOL AirpcapGetDeviceSupportedChannels(PAirpcapHandle AdapterHandle,
     return ret;
 }
 
+/* AirpcapConvertFrequencyToChannel and
+ * AirpcapConvertChannelToFrequency are adapted from CACE's airpcap.c.
+ * 
+ * Not exactly efficient, but it's unlikely this function is called in
+ * code that must be performant.  If I'm wrong, please complain and I
+ * will make it faster :)
+ */
 BOOL AirpcapConvertFrequencyToChannel(UINT Frequency,
                                       PUINT PChannel,
                                       PAirpcapChannelBand PBand)
 {
+    size_t fc = (sizeof(g_Channels) / sizeof(g_Channels[0]));
+    for (size_t f = 0; f < fc; f++) {
+        if (Frequency == g_Channels[f].Frequency) {
+            if (PChannel)
+                *PChannel = g_Channels[f].Channel;
+            if (PBand)
+                *PBand = g_Channels[f].Band;
+
+            return TRUE;
+        }
+    }
     return FALSE;
 }
-
 BOOL AirpcapConvertChannelToFrequency(UINT Channel,
                                       PUINT PFrequency)
 {
+    size_t fc = (sizeof(g_Channels) / sizeof(g_Channels[0]));
+    for (size_t f = 0; f < fc; f++) {
+        if (Channel == g_Channels[f].Channel) {
+            if (PFrequency)
+                *PFrequency = g_Channels[f].Frequency;
+
+            return TRUE;
+        }
+    }
     return FALSE;
 }
