@@ -78,13 +78,7 @@ void test(PAirpcapHandle handle)
                 fprintf(stderr, "BUG: invalid frequency %d!\n", frequency);
                 continue;
             }
-            printf("\t[%d] Frequency: %d MHz\n",  channel, frequency);
-            
-            if (0 != channel_info[c].ExtChannel) {
-                printf("\tExtension channel info:\n");
-            } else {
-                printf("\tLegacy 20 MHz channel.\n");
-            }
+            printf("   Channel %d (%d MHz)\n",  channel, frequency);
         }
     } else {
         printf("Error getting supported channels:\n");
