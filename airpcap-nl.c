@@ -252,12 +252,38 @@ int wiphy_dump_handler(struct nl_msg *msg, void *data)
                   nla_len(nl_band),
                   NULL);
 
-        tb_band_freqs = tb_band[NL80211_BAND_ATTR_FREQS];
+        /* If we have an BAND_ATTR_HT_CAPA attribute, then
+         * we are 802.11n capable. */
+        if (tb_band[NL80211_BAND_ATTR_HT_CAPA]) {
+            handle->cap.SupportedMedia |= AIRPCAP_MEDIUM_802_11_N;
+        }
+        nla_for_each_nested(nl_rate, tb_band[NL80211_BAND_ATTR_RATES], rate_rem) {
+            uint32_t rate;
+            nla_parse(tb_rate, NL80211_BITRATE_ATTR_MAX,
+                      nla_data(nl_rate),
+                      nla_len(nl_rate),
+                      rate_policy);
+
+            if (NULL == tb_rate[NL80211_BITRATE_ATTR_RATE])
+                continue;
+
+            /* If we support bit rates > 11.0 Kbps, we definitely
+             * support 802.11g. Not quite sure how to be sure
+             * that 802.11a or 802.11b modulations are supported... */
+            rate = nla_get_u32(tb_rate[NL80211_BITRATE_ATTR_RATE]);
+            if (rate > 110) { /* kbps */
+                handle->cap.SupportedMedia |= AIRPCAP_MEDIUM_802_11_G;
+            }
+        }
+        
+        /* HT capable? */
+        handle->cap.SupportedMedia |= AIRPCAP_MEDIUM_802_11_B;
 
         /* Loop through NL80211_BAND_ATTR_FREQS once to
          * get AirpcapChannelInfo array allocation size.
          * Inefficient, but we only do it once. */
         handle->channel_info_count = 0;
+        tb_band_freqs = tb_band[NL80211_BAND_ATTR_FREQS];
         nla_for_each_nested(nl_freq, tb_band_freqs, freq_rem) {
             nla_parse(tb_freq, NL80211_FREQUENCY_ATTR_MAX,
                       nla_data(nl_freq),
@@ -300,11 +326,39 @@ int wiphy_dump_handler(struct nl_msg *msg, void *data)
             info->Flags = 0;
             /* Must be {0, 0, 0} according to airpcap docs */
             memset(info->Reserved, 0, sizeof(info->Reserved));
+
+            /* Add SupportedBands based on parsed frequencies. */
+            if (frequency >= 2412 && frequency <= 2484) {
+                handle->cap.SupportedBands |= AIRPCAP_BAND_2GHZ;
+            } else if (frequency >= 4915 && frequency <= 5825) {
+                handle->cap.SupportedBands |= AIRPCAP_BAND_5GHZ;
+            }
             
             freq_count++;
         }
     }
 
+    handle->cap.AdapterModelName = "nl80211-compatible PHY";
+    /* TODO: how to figure this out from the driver?
+     * Do we really need to fill this information in? */
+    handle->cap.AdapterBus = AIRPCAP_BUS_PCI_EXPRESS;
+    /* How is this exposed in NL80211? */
+    handle->cap.CanTransmit = TRUE;
+    /* There is no way to set the transmit power in NL80211. */
+    handle->cap.CanSetTransmitPower = FALSE;
+    handle->cap.ExternalAntennaPlug = FALSE; // unknown
+
+    /* Identify what kind of "Airpcap" we are by our existing
+     * capabilities (e.g., transmit and 802.11n support).
+     */
+    if (handle->cap.SupportedMedia & AIRPCAP_MEDIUM_802_11_N) {
+        handle->cap.AdapterId = \
+            handle->cap.CanTransmit ? AIRPCAP_ID_NX : AIRPCAP_ID_N;
+    } else {
+        handle->cap.AdapterId = \
+            handle->cap.CanTransmit ? AIRPCAP_ID_TX : AIRPCAP_ID_CLASSIC;
+    }
+    
     return NL_SKIP;
 }
 
@@ -572,6 +626,16 @@ BOOL AirpcapGetDeviceSupportedChannels(PAirpcapHandle AdapterHandle,
     if (AdapterHandle && ppChannelInfo && pNumChannelInfo) {
         *ppChannelInfo   = AdapterHandle->channel_info;
         *pNumChannelInfo = AdapterHandle->channel_info_count;
+        ret = TRUE;
+    }
+    return ret;
+}
+
+BOOL AirpcapGetDeviceCapabilities(PAirpcapHandle AdapterHandle,
+                                  PAirpcapDeviceCapabilities *PCapabilities) {
+    BOOL ret = FALSE;
+    if (AdapterHandle && PCapabilities) {
+        *PCapabilities = &AdapterHandle->cap;
         ret = TRUE;
     }
     return ret;

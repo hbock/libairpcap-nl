@@ -15,6 +15,46 @@ void test(PAirpcapHandle handle)
     }
     printf("\n");
 
+    PAirpcapDeviceCapabilities cap;
+    if (FALSE == AirpcapGetDeviceCapabilities(handle, &cap)) {
+        fprintf(stderr, "AirpcapGetDeviceCapabilities failed!\n");
+    } else {
+        printf("Device capabilities:\n");
+        printf("AdapterModelName: %s\n", cap->AdapterModelName);
+
+        printf("Supported bands: ");
+        if (cap->SupportedBands & AIRPCAP_BAND_2GHZ)
+            printf("2.4GHz ");
+        if (cap->SupportedBands & AIRPCAP_BAND_5GHZ)
+            printf("5GHz");
+        printf("\n");
+
+        printf("Supported media: ");
+        if (cap->SupportedMedia & AIRPCAP_MEDIUM_802_11_A)
+            printf("802.11a ");
+        if (cap->SupportedMedia & AIRPCAP_MEDIUM_802_11_B)
+            printf("802.11b ");
+        if (cap->SupportedMedia & AIRPCAP_MEDIUM_802_11_G)
+            printf("802.11g ");
+        if (cap->SupportedMedia & AIRPCAP_MEDIUM_802_11_N)
+            printf("802.11n ");
+        printf("\n");
+
+        printf("Can inject packets: ");
+        if (TRUE == cap->CanTransmit)
+            printf("Yes");
+        else
+            printf("No");
+        printf("\n");
+        
+        printf("Can set transmit power: ");
+        if (TRUE == cap->CanSetTransmitPower)
+            printf("Yes");
+        else
+            printf("No");
+        printf("\n");
+    }
+
     PAirpcapChannelInfo channel_info;
     UINT channel_info_count;
     BOOL ret;
@@ -22,6 +62,7 @@ void test(PAirpcapHandle handle)
     ret = AirpcapGetDeviceSupportedChannels(handle,
                                             &channel_info,
                                             &channel_info_count);
+
     if (TRUE == ret) {
         printf("Channels supported by this device:\n");
         for (UINT c = 0; c < channel_info_count; c++) {

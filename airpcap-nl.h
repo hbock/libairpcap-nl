@@ -42,6 +42,7 @@ struct _AirpcapHandle {
     /* Airpcap parameters. */
     CHAR last_error[AIRPCAP_ERRBUF_SIZE];
 
+    AirpcapDeviceCapabilities cap;
     AirpcapMacAddress mac;
     /* For AirpcapGetLedsNumber */
     UINT led_count;
