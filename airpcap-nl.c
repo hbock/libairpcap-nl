@@ -17,6 +17,9 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  */
+/* For strdup(3) */
+#define _BSD_SOURCE
+
 #include <errno.h>
 #include <stdio.h>
 #include <stdarg.h>
@@ -47,6 +50,9 @@
 /* #define nl_handle_alloc_cb nl_socket_alloc_cb */
 /* #define nl_handle_destroy nl_socket_free */
 #endif /* CONFIG_LIBNL20 */
+
+static PAirpcapHandle airpcap_handle_new(void);
+static void airpcap_handle_free(PAirpcapHandle handle);
 
 static void setebuf(PCHAR ebuf, const char *format, ...)
 {
@@ -146,7 +152,6 @@ nl80211_state_init(PAirpcapHandle handle, PCHAR Ebuf)
                            handle->ifindex,
                            handle->mac.Address);
 
-
     return 0;
 
 err:
@@ -158,7 +163,6 @@ err:
         nl_socket_free(handle->nl_socket);
     if (rt_sock)
         nl_socket_free(rt_sock);
-
 
     return -1;
 }
@@ -189,10 +193,22 @@ ack_handler(struct nl_msg *msg UNUSED,
 	return NL_STOP;
 }
 
+enum airpcap_wiphy_request_type {
+    AIRPCAP_NL_GET_DEVICE_LIST,
+    AIRPCAP_NL_NEW_DEVICE,
+};
+struct airpcap_wiphy_data {
+    enum airpcap_wiphy_request_type type;
+    PAirpcapDeviceDescription start, current;
+    PAirpcapHandle handle;
+};
+
 static
-int wiphy_dump_handler(struct nl_msg *msg, void *data)
+int wiphy_match_handler(struct nl_msg *msg, void *data)
 {
-    PAirpcapHandle handle = (PAirpcapHandle)data;
+    struct airpcap_wiphy_data *w = (struct airpcap_wiphy_data *)data;
+    PAirpcapHandle handle;
+    PAirpcapDeviceDescription desc;
 
     struct nlattr *tb_msg[NL80211_ATTR_MAX + 1];
     struct nlattr *tb_band[NL80211_BAND_ATTR_MAX + 1];
@@ -232,15 +248,42 @@ int wiphy_dump_handler(struct nl_msg *msg, void *data)
               genlmsg_attrlen(gnlh, 0),
               NULL);
 
+    /* Ignore this result if there is no band data.
+     * Why we'd hit this condition... no idea. */
     if (NULL == tb_msg[NL80211_ATTR_WIPHY_BANDS])
         return NL_SKIP;
 
-    if (tb_msg[NL80211_ATTR_WIPHY_NAME]) {
-        printf("PHY %s\n", nla_get_string(tb_msg[NL80211_ATTR_WIPHY_NAME]));
-    }
+    if (AIRPCAP_NL_NEW_DEVICE == w->type)
+        handle = w->handle;
     else {
-        printf("Nuts\n");
+        /* Temporary handle, just for this callback.
+         */
+        handle = airpcap_handle_new();
+        /* New AirpcapDeviceDescription for this WIPHY_GET
+         * match. */
+        desc = (PAirpcapDeviceDescription)malloc(sizeof(*desc));
+        desc->next = NULL;
+        /* If this is the first device we're enumerating, assign the
+         * start and current pointers to the newly allocated
+         * description.
+         */
+        if (NULL == w->start) {
+            w->start   = desc;
+            w->current = desc;
+        } else {
+            /* Otherwise, update the linked list. */
+            w->current->next = desc;
+            w->current = desc;
+        }
+
+        /* Assign device WIPHY_NAME to the "Name" attribute.
+         * Description is assigned after we heuristically
+         * emulate the various Airpcap models. */
+        if (tb_msg[NL80211_ATTR_WIPHY_NAME]) {
+            desc->Name = strdup(nla_get_string(tb_msg[NL80211_ATTR_WIPHY_NAME]));
+        }
     }
+
 
     bandidx = 1;
     nla_for_each_nested(nl_band, tb_msg[NL80211_ATTR_WIPHY_BANDS], band_rem) {
@@ -296,22 +339,25 @@ int wiphy_dump_handler(struct nl_msg *msg, void *data)
             handle->channel_info_count++;
  
         }
-        handle->channel_info =                                          \
-            (AirpcapChannelInfo *)malloc(sizeof(AirpcapChannelInfo) * handle->channel_info_count);
+        if (AIRPCAP_NL_NEW_DEVICE == w->type) {
+            handle->channel_info =                                      \
+                (AirpcapChannelInfo *)malloc(sizeof(AirpcapChannelInfo) * handle->channel_info_count);
 
-        /* FIXME: how to set error from here? */
-        if (NULL == handle->channel_info) {
-            fprintf(stderr, "Unable to allocate AirpcapChannelInfo\n");
-            continue;
+            /* FIXME: how to set error from here? */
+            if (NULL == handle->channel_info) {
+                fprintf(stderr, "Unable to allocate AirpcapChannelInfo\n");
+                continue;
+            }
         }
 
         nla_for_each_nested(nl_freq, tb_band_freqs, freq_rem) {
-            PAirpcapChannelInfo info = &handle->channel_info[freq_count];
+            PAirpcapChannelInfo info;
 
             nla_parse(tb_freq, NL80211_FREQUENCY_ATTR_MAX,
                       nla_data(nl_freq),
                       nla_len(nl_freq),
                       freq_policy);
+
             if (NULL == tb_freq[NL80211_FREQUENCY_ATTR_FREQ])
                 continue;
             /* Ignore disabled frequencies (e.g., due to regulatory
@@ -320,21 +366,23 @@ int wiphy_dump_handler(struct nl_msg *msg, void *data)
                 continue;
 
             frequency = nla_get_u32(tb_freq[NL80211_FREQUENCY_ATTR_FREQ]);
-            info->Frequency = (UINT)frequency;
-            /* TODO */
-            info->ExtChannel = 0;
-            info->Flags = 0;
-            /* Must be {0, 0, 0} according to airpcap docs */
-            memset(info->Reserved, 0, sizeof(info->Reserved));
-
+            
+            if (AIRPCAP_NL_NEW_DEVICE == w->type) {
+                info = &handle->channel_info[freq_count];
+                info->Frequency = (UINT)frequency;
+                /* TODO */
+                info->ExtChannel = 0;
+                info->Flags = 0;
+                /* Must be {0, 0} according to airpcap docs */
+                memset(info->Reserved, 0, sizeof(info->Reserved));
+                freq_count++;
+            }
             /* Add SupportedBands based on parsed frequencies. */
             if (frequency >= 2412 && frequency <= 2484) {
                 handle->cap.SupportedBands |= AIRPCAP_BAND_2GHZ;
             } else if (frequency >= 4915 && frequency <= 5825) {
                 handle->cap.SupportedBands |= AIRPCAP_BAND_5GHZ;
             }
-            
-            freq_count++;
         }
     }
 
@@ -358,13 +406,52 @@ int wiphy_dump_handler(struct nl_msg *msg, void *data)
         handle->cap.AdapterId = \
             handle->cap.CanTransmit ? AIRPCAP_ID_TX : AIRPCAP_ID_CLASSIC;
     }
+
+    if (AIRPCAP_NL_GET_DEVICE_LIST == w->type) {
+        PCHAR d;
+        desc->Description = (PCHAR)malloc(512);
+        
+        /* Assign Description attribute based on what
+         * Airpcap device we are going to "emulate".
+         *
+         * This should hopefully someday be filled in with better
+         * information about the adapter or driver from the
+         * mac80211 / nl80211 layer. */
+        switch (handle->cap.AdapterId) {
+        case AIRPCAP_ID_N:
+        case AIRPCAP_ID_NX:
+            d = "Airpcap NX emulation (802.11n)";
+            break;
+
+        case AIRPCAP_ID_TX:
+            d = "Airpcap TX emulation (802.11bg)";
+            break;
+
+        case AIRPCAP_ID_CLASSIC:
+            d = "Airpcap Classic emulation (802.11bg)";
+            break;
+
+        default:
+            d = "BUG: Unspecified Airpcap emulation";
+            break;
+        }
+
+        strncpy(desc->Description, d, 512);
+        if (handle->cap.SupportedBands & AIRPCAP_BAND_5GHZ) {
+            size_t s = strlen(desc->Description);
+            strncat(desc->Description,
+                    " (5 GHz)", 512 - s);
+        }
+        /* Free the temporary handle. */
+        airpcap_handle_free(handle);
+    }
     
     return NL_SKIP;
 }
 
 /* Adapted from hostapd/src/drivers/driver_nl80211.c. */
 static int
-nl_send_and_recv(PAirpcapHandle handle,
+nl_send_and_recv(struct nl_sock *sock,
                  struct nl_msg *msg,
                  nl_recvmsg_msg_cb_t valid_handler,
                  //int (*valid_handler)(struct nl_msg *, void *),
@@ -378,7 +465,7 @@ nl_send_and_recv(PAirpcapHandle handle,
         goto send_and_recv_done;
     }
 
-    err = nl_send_auto_complete(handle->nl_socket, msg);
+    err = nl_send_auto_complete(sock, msg);
     if (err < 0)
         goto send_and_recv_done;
 
@@ -397,7 +484,7 @@ nl_send_and_recv(PAirpcapHandle handle,
     }
 
     while (err > 0) {
-        nl_recvmsgs(handle->nl_socket, cb);
+        nl_recvmsgs(sock, cb);
     }
 
 send_and_recv_done:
@@ -433,12 +520,19 @@ nl80211_device_init(PAirpcapHandle handle, PCHAR Ebuf)
      * the PHY interface. */
     nla_put_u32(msg, NL80211_ATTR_IFINDEX, handle->ifindex);
 
-    err = nl_send_and_recv(handle, msg,
-                           wiphy_dump_handler, handle);
-
+    struct airpcap_wiphy_data data;
+    data.type    = AIRPCAP_NL_NEW_DEVICE;
+    data.handle  = handle;
+    data.start   = NULL;
+    data.current = NULL;
+    
+    err = nl_send_and_recv(handle->nl_socket, msg,
+                           wiphy_match_handler, &data);
     if (err < 0) {
         setebuf(Ebuf, "Error getting device information from netlink.");
     }
+
+    /* TODO : NL80211_CMD_GET_STATION for NL80211_ATTR_WIPHY_FREQ ? */
 
     return err;
 }
@@ -527,6 +621,108 @@ PCHAR AirpcapGetLastError(PAirpcapHandle AdapterHandle)
         ret = AdapterHandle->last_error;
     }
     return ret;
+}
+
+
+static PAirpcapDeviceDescription
+nl80211_get_all_devices(PCHAR Ebuf)
+{
+    int err;
+    struct nl_msg *msg;
+    struct nl_sock *sock = NULL;
+    struct nl_cache *cache;
+    struct genl_family *nl80211;
+    PAirpcapDeviceDescription desc = NULL;
+
+    sock = nl_socket_alloc();
+    /* Allocate the netlink socket.
+     */
+    if (NULL == sock) {
+        setebuf(Ebuf, "Failed to allocate netlink socket.");
+        goto err;
+    }
+    /* Connect to the generic netlink.
+     */
+    if (genl_connect(sock)) {
+        setebuf(Ebuf, "Failed to connect to generic netlink.");
+        goto err;
+    }
+    if (genl_ctrl_alloc_cache(sock, &cache)) {
+        setebuf(Ebuf, "Failed to allocate generic netlink cache.");
+        goto err;
+    }
+
+    /* Find and get a reference to the nl80211 family.
+     * Must hand back the reference via genl_family_put. */
+    nl80211 = genl_ctrl_search_by_name(cache, "nl80211");
+    if (NULL == nl80211) {
+        setebuf(Ebuf, "Netlink module nl80211 not found.");
+        goto err;
+    }
+
+    msg = nlmsg_alloc();
+    if (!msg) {
+        setebuf(Ebuf, "Error allocating netlink message.");
+        goto err;
+    }
+
+    genlmsg_put(msg, NL_AUTO_PID, NL_AUTO_SEQ,
+                genl_family_get_id(nl80211), 0,
+                /* Get ALL wireless PHY information. */
+                NLM_F_DUMP, NL80211_CMD_GET_WIPHY, 0);
+
+    struct airpcap_wiphy_data data;
+    data.type    = AIRPCAP_NL_GET_DEVICE_LIST;
+    data.handle  = NULL;
+    data.start   = NULL;
+    data.current = NULL;
+    
+    err = nl_send_and_recv(sock, msg, wiphy_match_handler, &data);
+    if (err < 0) {
+        setebuf(Ebuf, "Error getting device information from netlink.");
+    } else {
+        desc = data.start;
+    }
+
+err:
+    if (nl80211)
+        genl_family_put(nl80211);
+    if (cache)
+        nl_cache_free(cache);
+    if (sock)
+        nl_socket_free(sock);
+
+    if (err < 0 || desc == NULL) {
+        return NULL;
+    } else {
+        return desc;
+    }
+}
+
+BOOL AirpcapGetDeviceList(PAirpcapDeviceDescription *PPAllDevs,
+                          PCHAR Ebuf)
+{
+    BOOL ret = FALSE;
+    if (PPAllDevs) {
+        *PPAllDevs = nl80211_get_all_devices(Ebuf);
+        ret = TRUE;
+    }
+    return ret;
+}
+
+void AirpcapFreeDeviceList(PAirpcapDeviceDescription PAllDevs)
+{
+    PAirpcapDeviceDescription next = NULL;
+
+    while (PAllDevs) {
+        next = PAllDevs->next;
+
+        free(PAllDevs->Name);
+        free(PAllDevs->Description);
+        free(PAllDevs);
+
+        PAllDevs = next;
+    }
 }
 
 /** STUB FUNCTION.  We have no concept of kernel buffers

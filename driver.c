@@ -90,16 +90,28 @@ int main(int argc,
 	 char **argv)
 {
     UINT major, minor, rev, build;
+    CHAR ebuf[AIRPCAP_ERRBUF_SIZE];
 
     AirpcapGetVersion(&major, &minor, &rev, &build);
     printf("Airpcap version %d.%d.%d.%d\n",
            major, minor, rev, build);
 
+    printf("Airpcap device enumeration:\n");
+    PAirpcapDeviceDescription desc;
+    if (FALSE == AirpcapGetDeviceList(&desc, ebuf)) {
+        fprintf(stderr, "AirpcapGetDeviceList error: %s\n", ebuf);
+    } else {
+        for(PAirpcapDeviceDescription d = desc; d; d = d->next) {
+            printf("Device %s: %s\n", d->Name, d->Description);
+        }
+    }
+    AirpcapFreeDeviceList(desc);
+    printf("\n");
+    
     if (argc > 1) {
         printf("Attempting to open %s...\n", argv[1]);
 
         PAirpcapHandle handle;
-        CHAR ebuf[AIRPCAP_ERRBUF_SIZE];
         
         handle = AirpcapOpen(argv[1], ebuf);
         if (NULL == handle) {
