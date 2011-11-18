@@ -239,7 +239,6 @@ int wiphy_match_handler(struct nl_msg *msg, void *data)
     int bandidx;
     /* remaining items for nla_for_each_nested */
     int band_rem, freq_rem, rate_rem, mode_rem, cmd_rem;
-    int freq_count = 0;
 
     /* parse the generic netlink reply. */
     struct genlmsghdr *gnlh = nlmsg_data(nlmsg_hdr(msg));
@@ -285,6 +284,45 @@ int wiphy_match_handler(struct nl_msg *msg, void *data)
     }
 
 
+    handle->channel_info_count = 0;
+    int freq_count = 0;
+
+    nla_for_each_nested(nl_band, tb_msg[NL80211_ATTR_WIPHY_BANDS], band_rem) {
+        struct nlattr *tb_band_freqs;
+
+        nla_parse(tb_band, NL80211_BAND_ATTR_MAX,
+                  nla_data(nl_band),
+                  nla_len(nl_band),
+                  NULL);
+
+        /* Loop through NL80211_BAND_ATTR_FREQS once to
+         * get AirpcapChannelInfo array allocation size.
+         * Inefficient, but we only do it once. */
+        tb_band_freqs = tb_band[NL80211_BAND_ATTR_FREQS];
+        nla_for_each_nested(nl_freq, tb_band_freqs, freq_rem) {
+            nla_parse(tb_freq, NL80211_FREQUENCY_ATTR_MAX,
+                      nla_data(nl_freq),
+                      nla_len(nl_freq),
+                      freq_policy);
+            /* Ignore disabled frequencies (e.g., due to regulatory
+             * domain issues. */
+            if (tb_freq[NL80211_FREQUENCY_ATTR_DISABLED])
+                continue;
+            handle->channel_info_count++;
+        }
+    }
+
+    if (AIRPCAP_NL_NEW_DEVICE == w->type) {
+        handle->channel_info =                                      \
+            (AirpcapChannelInfo *)malloc(sizeof(AirpcapChannelInfo) * handle->channel_info_count);
+
+        /* FIXME: how to set error from here? */
+        if (NULL == handle->channel_info) {
+            fprintf(stderr, "Unable to allocate AirpcapChannelInfo\n");
+            return NL_SKIP;
+        }
+    }
+
     bandidx = 1;
     nla_for_each_nested(nl_band, tb_msg[NL80211_ATTR_WIPHY_BANDS], band_rem) {
         uint32_t frequency;
@@ -322,34 +360,7 @@ int wiphy_match_handler(struct nl_msg *msg, void *data)
         /* HT capable? */
         handle->cap.SupportedMedia |= AIRPCAP_MEDIUM_802_11_B;
 
-        /* Loop through NL80211_BAND_ATTR_FREQS once to
-         * get AirpcapChannelInfo array allocation size.
-         * Inefficient, but we only do it once. */
-        handle->channel_info_count = 0;
         tb_band_freqs = tb_band[NL80211_BAND_ATTR_FREQS];
-        nla_for_each_nested(nl_freq, tb_band_freqs, freq_rem) {
-            nla_parse(tb_freq, NL80211_FREQUENCY_ATTR_MAX,
-                      nla_data(nl_freq),
-                      nla_len(nl_freq),
-                      freq_policy);
-            /* Ignore disabled frequencies (e.g., due to regulatory
-             * domain issues. */
-            if (tb_freq[NL80211_FREQUENCY_ATTR_DISABLED])
-                continue;
-            handle->channel_info_count++;
- 
-        }
-        if (AIRPCAP_NL_NEW_DEVICE == w->type) {
-            handle->channel_info =                                      \
-                (AirpcapChannelInfo *)malloc(sizeof(AirpcapChannelInfo) * handle->channel_info_count);
-
-            /* FIXME: how to set error from here? */
-            if (NULL == handle->channel_info) {
-                fprintf(stderr, "Unable to allocate AirpcapChannelInfo\n");
-                continue;
-            }
-        }
-
         nla_for_each_nested(nl_freq, tb_band_freqs, freq_rem) {
             PAirpcapChannelInfo info;
 
