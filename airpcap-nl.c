@@ -142,7 +142,6 @@ nl80211_state_init(PAirpcapHandle handle, PCHAR Ebuf)
     err = nl_connect(rt_sock, NETLINK_ROUTE);
     err = rtnl_link_alloc_cache(rt_sock, &handle->rtnl_link_cache);
     if (err < 0) {
-        
         setebuf(Ebuf, "Failed to allocate NETLINK_ROUTE link cache: %s\n",
                 nl_geterror(err));
         nl_close(rt_sock);
@@ -621,6 +620,7 @@ PAirpcapHandle AirpcapOpen(PCHAR DeviceName, PCHAR Ebuf)
         /* We might as well just call close here, since
          * all state is essentially allocated and ready.
          */
+        strncpy(Ebuf, handle->last_error, AIRPCAP_ERRBUF_SIZE);
         AirpcapClose(handle);
         return NULL;
     }
@@ -873,7 +873,7 @@ BOOL AirpcapSetDeviceChannelEx(PAirpcapHandle AdapterHandle,
         if (err < 0) {
         nla_put_failure:
             setebuf(AdapterHandle->last_error, "NL80211_CMD_SET_WIPHY failed: %s",
-                    nl_geterror(err));
+                    strerror(-err));
             ret = FALSE;
         } else {
             /* Save current channel state for GetChannel(Ex). */
