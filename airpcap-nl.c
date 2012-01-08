@@ -69,7 +69,7 @@ static void setebuf(PCHAR ebuf, const char *format, ...)
     }
 }
 
-void AirpcapGetVersion(PUINT VersionMajor,
+VOID AirpcapGetVersion(PUINT VersionMajor,
 		       PUINT VersionMinor,
 		       PUINT VersionRev,
 		       PUINT VersionBuild)
@@ -174,6 +174,8 @@ error_handler(struct sockaddr_nl *nla UNUSED,
 {
 	int *ret = arg;
 	*ret = err->error;
+
+        /* should this be STOP or SKIP? */
 	return NL_STOP;
 }
 static int
@@ -182,6 +184,7 @@ finish_handler(struct nl_msg *msg UNUSED,
 {
 	int *ret = arg;
 	*ret = 0;
+
 	return NL_SKIP;
 }
 static int
@@ -190,6 +193,7 @@ ack_handler(struct nl_msg *msg UNUSED,
 {
 	int *ret = arg;
 	*ret = 0;
+
 	return NL_STOP;
 }
 
@@ -573,6 +577,18 @@ airpcap_handle_free(PAirpcapHandle handle)
     free(handle);
 }
 
+/* TODO:
+ *   - Check if interface supports monitor mode (NL80211_ATTR_SUPPORTED_IFTYPES)
+ *     at all - in GET_WIPHY? seems to make sense for it to be there.
+ *   - Check if interface is NL80211_ATTR_IFTYPE
+ *     NL80211_IFTYPE_MONITOR (use NL80211_CMD_GET_INTERFACE)
+ *   - If interface is NOT IFTYPE_MONITOR, search all interfaces
+ *     for the same WIPHY index, maybe with NLM_F_DUMP and try to find
+ *     an existing one.
+ *     Add a flag in AirpcapHandle internally to make this easier?
+ *   - If no monitor interface is defined, create one.
+ *     Attempt to destroy monitor interface on close? onexit()?
+ */
 PAirpcapHandle AirpcapOpen(PCHAR DeviceName, PCHAR Ebuf)
 {
     PAirpcapHandle handle;
@@ -596,15 +612,24 @@ PAirpcapHandle AirpcapOpen(PCHAR DeviceName, PCHAR Ebuf)
     if (-1 == nl80211_state_init(handle, Ebuf)) {
         return NULL;
     }
-    /* TODO: proper deallocation. */
+    /* FIXME: proper deallocation. */
     if (-1 == nl80211_device_init(handle, Ebuf)) {
+        return NULL;
+    }
+
+    if (FALSE == AirpcapSetDeviceChannel(handle, 6)) {
+        /* We might as well just call close here, since
+         * all state is essentially allocated and ready.
+         */
+        AirpcapClose(handle);
         return NULL;
     }
 
     return handle;
 }
 
-static void nl80211_state_free(PAirpcapHandle handle)
+static
+void nl80211_state_free(PAirpcapHandle handle)
 {
     if (handle) {
         nl_cb_put(handle->nl_cb);
@@ -721,7 +746,7 @@ BOOL AirpcapGetDeviceList(PAirpcapDeviceDescription *PPAllDevs,
     return ret;
 }
 
-void AirpcapFreeDeviceList(PAirpcapDeviceDescription PAllDevs)
+VOID AirpcapFreeDeviceList(PAirpcapDeviceDescription PAllDevs)
 {
     PAirpcapDeviceDescription next = NULL;
 
@@ -734,6 +759,151 @@ void AirpcapFreeDeviceList(PAirpcapDeviceDescription PAllDevs)
 
         PAllDevs = next;
     }
+}
+
+BOOL AirpcapSetDeviceChannel(PAirpcapHandle AdapterHandle,
+                             UINT Channel)
+{
+    BOOL ret = FALSE;
+
+    /* To share common code, we (attempt to) convert Channel to
+     * its frequency.  We then call into AirpcapSetDeviceChannelEx,
+     * assuming 20 MHz mode is desired.
+     */
+    if (AdapterHandle) {
+        UINT freq;
+        if(FALSE == AirpcapConvertChannelToFrequency(Channel, &freq)) {
+            setebuf(AdapterHandle->last_error, "Invalid channel %u.", Channel);
+            ret = FALSE;
+        } else {
+            AirpcapChannelInfo info;
+            info.Frequency  = freq;
+            info.ExtChannel = 0; /* Force 20 MHz mode (HT20 or legacy) */
+            info.Flags      = 0; /* TODO: AIRPCAP_CIF_TX_ENABLED? */
+            /* Should be set to {0,0} */
+            info.Reserved[0] = 0;
+            info.Reserved[1] = 0;
+
+            ret = AirpcapSetDeviceChannelEx(AdapterHandle, info);
+        }
+    }
+
+    return ret;
+}
+
+BOOL AirpcapGetDeviceChannel(PAirpcapHandle AdapterHandle, PUINT PChannel)
+{
+    BOOL ret = FALSE;
+    if (AdapterHandle) {
+        ret = TRUE;
+        if (PChannel) {
+            BOOL ftc_ret;
+            ftc_ret = AirpcapConvertFrequencyToChannel(AdapterHandle->current_channel.Frequency,
+                                                       PChannel, NULL);
+            if (FALSE == ftc_ret) {
+                setebuf(AdapterHandle->last_error,
+                        "Internal error converting last channel frequency. Report a bug.");
+                ret = FALSE;
+            }
+        }
+    }
+    return ret;
+}
+
+static
+int cmd_set_channel_handler(struct nl_msg *msg, void *data)
+{
+    printf("CMD_SET_CHANNEL OK!\n");
+    return NL_SKIP;
+}
+
+BOOL AirpcapSetDeviceChannelEx(PAirpcapHandle AdapterHandle,
+                               AirpcapChannelInfo ChannelInfo)
+{
+/* @NL80211_CMD_SET_CHANNEL: Set the channel (using %NL80211_ATTR_WIPHY_FREQ
+ *	and %NL80211_ATTR_WIPHY_CHANNEL_TYPE) the given interface (identifed
+ *	by %NL80211_ATTR_IFINDEX) shall operate on.
+ *	In case multiple channels are supported by the device, the mechanism
+ */
+    BOOL ret = FALSE;
+    if (AdapterHandle) {
+        int err;
+        uint32_t channel_type;
+        struct nl_msg *msg;
+
+        /* Select channel type for CMD_SET_CHANNEL, based
+         * on the value in AirpcapChannelInfo.ExtChannel (-1, 0, 1). */
+        switch (ChannelInfo.ExtChannel) {
+        case 0:
+            /* TODO: This should probably be NL80211_CHAN_NO_HT
+             * for non-HT capture devices? Does it matter in monitor
+             * mode? Experiment. */
+            channel_type = NL80211_CHAN_HT20;
+            break;
+        case 1:
+            channel_type = NL80211_CHAN_HT40PLUS;
+            break;
+        case -1:
+            channel_type = NL80211_CHAN_HT40MINUS;
+            break;
+        default:
+            setebuf(AdapterHandle->last_error, "Invalid ExtChannel %hhu.",
+                    ChannelInfo.ExtChannel);
+            return FALSE;
+        }
+        
+        msg = nlmsg_alloc();
+        if (NULL == msg) {
+            setebuf(AdapterHandle->last_error, "Error allocating nlmsg.");
+            return FALSE;
+        }
+
+        genlmsg_put(msg, 0,0,//NL_AUTO_PID, NL_AUTO_SEQ,
+                    genl_family_get_id(AdapterHandle->nl80211), 0,
+                    0,//NLM_F_MATCH,
+                    NL80211_CMD_SET_WIPHY, 0);
+
+        /* Set up CMD_SET_CHANNEL */
+        NLA_PUT_U32(msg, NL80211_ATTR_IFINDEX, AdapterHandle->ifindex);
+        NLA_PUT_U32(msg, NL80211_ATTR_WIPHY_FREQ, ChannelInfo.Frequency);
+        NLA_PUT_U32(msg, NL80211_ATTR_WIPHY_CHANNEL_TYPE, channel_type);
+
+        err = nl_send_and_recv(AdapterHandle->nl_socket, msg,
+                               cmd_set_channel_handler, NULL);
+        if (err < 0) {
+        nla_put_failure:
+            setebuf(AdapterHandle->last_error, "NL80211_CMD_SET_WIPHY failed: %s",
+                    nl_geterror(err));
+            ret = FALSE;
+        } else {
+            /* Save current channel state for GetChannel(Ex). */
+            memcpy(&AdapterHandle->current_channel, &ChannelInfo, sizeof(AirpcapChannelInfo));
+            ret = TRUE;
+        }
+    }
+    return ret;
+}
+
+/* Unfortunately, it does not appear that nl80211 has any method of
+ * returning the current center frequency of the device.
+ *
+ * Also, it seems that at least on my kernel, 2.6.38-12-generic, iwlagn or
+ * cfg80211's wext-compat layer lies about the current frequency.
+ * I will query linux-wireless about this.
+ *
+ * So, for now, we simply return the last channel that was set. AirPcaps are
+ * set to 6 by default, so we choose to force it to a known channel on
+ * AirpcapOpen. */
+BOOL AirpcapGetDeviceChannelEx(PAirpcapHandle AdapterHandle,
+                               PAirpcapChannelInfo PChannelInfo)
+{
+    BOOL ret = FALSE;
+    if (AdapterHandle) {
+        memcpy(PChannelInfo, &AdapterHandle->current_channel,
+               sizeof(*PChannelInfo));
+        ret = TRUE;
+    }
+    return ret;
 }
 
 /** STUB FUNCTION.  We have no concept of kernel buffers

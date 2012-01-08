@@ -48,6 +48,8 @@ struct _AirpcapHandle {
     UINT led_count;
     AirpcapChannelInfo *channel_info;
     UINT channel_info_count;
+
+    AirpcapChannelInfo current_channel;
 };
 
 #define UNUSED __attribute__((unused))
