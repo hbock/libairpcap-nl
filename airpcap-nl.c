@@ -872,7 +872,7 @@ BOOL AirpcapSetDeviceChannelEx(PAirpcapHandle AdapterHandle,
                                cmd_set_channel_handler, NULL);
         if (err < 0) {
         nla_put_failure:
-            setebuf(AdapterHandle->last_error, "NL80211_CMD_SET_WIPHY failed: %s",
+            setebuf(AdapterHandle->last_error, "Channel change failed: %s",
                     strerror(-err));
             ret = FALSE;
         } else {
