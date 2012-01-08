@@ -84,6 +84,22 @@ void test(PAirpcapHandle handle)
         printf("Error getting supported channels:\n");
         printf("%s\n", AirpcapGetLastError(handle));
     }
+
+    UINT chan;
+    AirpcapChannelInfo chaninfo;
+    if (FALSE == AirpcapGetDeviceChannel(handle, &chan)) {
+        printf("Error getting current channel: %s\n", AirpcapGetLastError(handle));
+    } else {
+        printf("AirpcapGetDeviceChannel = %u\n", chan);
+    }
+    if (FALSE == AirpcapGetDeviceChannelEx(handle, &chaninfo)) {
+        printf("Error getting current channel: %s\n", AirpcapGetLastError(handle));
+    } else {
+        printf("AirpcapGetDeviceChannelEx = {Freq = %u, Ext = %hhu, Flags = %hhu}\n",
+               chaninfo.Frequency,
+               chaninfo.ExtChannel,
+               chaninfo.Flags);
+    }
 }
     
 int main(int argc,
