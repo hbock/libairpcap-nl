@@ -6,8 +6,12 @@
 #include <netinet/if_ether.h>
 #include <arpa/inet.h>
 
-//#include <linux/types.h>
+//m#include <linux/types.h>
 #include <net/if.h>
+
+#include "airpcap.h"
+
+void setebuf(PCHAR ebuf, const char *format, ...);
 
 int ifconfig_set_flags(const char *in_dev, short flags);
 int ifconfig_get_flags(const char *in_dev, short *flags);

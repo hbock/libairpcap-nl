@@ -22,8 +22,24 @@
 #include <string.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <stdarg.h>
 
 #include "util.h"
+
+void setebuf(PCHAR ebuf, const char *format, ...)
+{
+    if (NULL != ebuf) {
+        va_list args;
+        va_start(args, format);
+        /* int message_len = strlen(msg);               */
+        /* if (message_len >= AIRPCAP_ERRBUF_SIZE) {          */
+        /*     message_len = AIRPCAP_ERRBUF_SIZE - 1;         */
+        /* } */
+        vsnprintf(ebuf, AIRPCAP_ERRBUF_SIZE, format, args);
+        /* strncpy(ebuf, msg, message_len); */
+        /* ebuf[message_len] = '\0';                              */
+    }
+}
 
 int ifconfig_set_flags(const char *in_dev, short flags)
 {

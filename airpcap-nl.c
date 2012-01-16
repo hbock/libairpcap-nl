@@ -2,7 +2,7 @@
 /*
  * Airpcap library implementation for nl80211
  *
- * Copyright 2011 Harry Bock <bock.harryw@gmail.com>
+ * Copyright 2011-2012 Harry Bock <bock.harryw@gmail.com>
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -19,7 +19,6 @@
  */
 #include <errno.h>
 #include <stdio.h>
-#include <stdarg.h>
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -52,21 +51,6 @@
 static PAirpcapHandle airpcap_handle_new(void);
 static void airpcap_handle_free(PAirpcapHandle handle);
 static int wiphy_match_handler(struct nl_msg *msg, void *data);
-
-static void setebuf(PCHAR ebuf, const char *format, ...)
-{
-    if (NULL != ebuf) {
-        va_list args;
-        va_start(args, format);
-        /* int message_len = strlen(msg);               */
-        /* if (message_len >= AIRPCAP_ERRBUF_SIZE) {          */
-        /*     message_len = AIRPCAP_ERRBUF_SIZE - 1;         */
-        /* } */
-        vsnprintf(ebuf, AIRPCAP_ERRBUF_SIZE, format, args);
-        /* strncpy(ebuf, msg, message_len); */
-        /* ebuf[message_len] = '\0';                              */
-    }
-}
 
 VOID AirpcapGetVersion(PUINT VersionMajor,
 		       PUINT VersionMinor,
