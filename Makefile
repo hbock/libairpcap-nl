@@ -22,10 +22,13 @@ driver: driver.c $(LIBSHORT)
 .PHONY: library
 library: $(LIB)
 
-$(LIB) $(LIBSHORT): airpcap-nl.o util.o
+$(LIB) $(LIBSHORT): airpcap-nl.o stubs.o util.o
 	$(CC) -shared $(SOFLAGS) -Wl,-soname,$(LIBSHORT) \
 		-o $(LIB) $(CLIBS) airpcap-nl.o util.o
 	ln -sf $(LIB) $(LIBSHORT)
+
+stubs.o: stubs.c
+	$(CC) -c $(CFLAGS) $(SOFLAGS) -o stubs.o stubs.c
 
 util.o: util.c
 	$(CC) -c $(CFLAGS) $(SOFLAGS) -o util.o util.c
