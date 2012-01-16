@@ -1,4 +1,5 @@
-#ifndef __APCAP_AIRPCAP_TYPES
+#ifndef __AIRPCAP_TYPES_H__
+#define __AIRPCAP_TYPES_H__
 
 #include <stdint.h>
 
@@ -32,4 +33,4 @@ typedef void VOID;
 typedef VOID *PVOID;
 typedef PVOID HANDLE;
 
-#endif /* __APCAP_AIRPCAP_TYPES */
+#endif /* __AIRPCAP_TYPES_H__ */
