@@ -708,7 +708,7 @@ int nl80211_set_monitor(PAirpcapHandle handle, PCHAR Ebuf)
     if (err < 0) {
     nla_put_failure:
         setebuf(Ebuf, "Failed to set interface %s to monitor mode: %s",
-                handle->monitor_ifname,
+                handle->master_ifname,
                 strerror(-err));
         return -1;
     }
