@@ -2,6 +2,8 @@
 all: driver
 
 CC       := gcc
+# _GNU_SOURCE is required to make libpcap work with -std=c99
+# and for strndup(3)
 CFLAGS   := -std=c99 -Wall -Wextra -g -O0 -D_GNU_SOURCE
 SOFLAGS  := -fPIC
 CINCLUDE := 

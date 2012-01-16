@@ -18,7 +18,7 @@ void test(PCHAR name)
     handle = AirpcapOpen(name, ebuf);
     if (NULL == handle) {
         fprintf(stderr, "AirpcapOpen error: %s\n", ebuf);
-        return 1;
+        return;
     }
 
     AirpcapGetMacAddress(handle, &mac);

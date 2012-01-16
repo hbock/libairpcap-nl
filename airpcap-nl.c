@@ -17,10 +17,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  */
-/* For strndup(3) */
-#define _BSD_SOURCE
-#define _GNU_SOURCE
-
 #include <errno.h>
 #include <stdio.h>
 #include <stdarg.h>
@@ -215,9 +211,6 @@ nl80211_get_wiphy(struct nl_sock *sock,
 static int
 interface_dump_handler(struct nl_msg *msg, void *arg)
 {
-    PAirpcapHandle handle = NULL;
-    PAirpcapDeviceDescription desc = NULL;
-
     struct airpcap_interface_dump_data *data = (struct airpcap_interface_dump_data *)arg;
     struct genlmsghdr *header = nlmsg_data(nlmsg_hdr(msg));
     struct nlattr *tb_msg[NL80211_ATTR_MAX + 1];
@@ -255,8 +248,9 @@ int wiphy_match_handler(struct nl_msg *msg, void *data)
     struct nlattr *nl_band;
     struct nlattr *nl_freq;
     struct nlattr *nl_rate;
-    struct nlattr *nl_mode;
-    struct nlattr *nl_cmd;
+    
+    /* struct nlattr *nl_mode; */
+    /* struct nlattr *nl_cmd; */
 
     /* Policy for parsing NL80211_FREQUENCY attribute */
     static struct nla_policy freq_policy[NL80211_FREQUENCY_ATTR_MAX + 1] = {
@@ -275,7 +269,7 @@ int wiphy_match_handler(struct nl_msg *msg, void *data)
 
     int bandidx;
     /* remaining items for nla_for_each_nested */
-    int band_rem, freq_rem, rate_rem, mode_rem, cmd_rem;
+    int band_rem, freq_rem, rate_rem;//, mode_rem, cmd_rem;
 
     /* parse the generic netlink reply. */
     struct genlmsghdr *gnlh = nlmsg_data(nlmsg_hdr(msg));
@@ -566,6 +560,8 @@ nl80211_device_init(PAirpcapHandle handle, PCHAR Ebuf)
     return err;
 }
 
+#ifdef USE_VIRTUAL_INTERFACES
+
 static
 int cmd_new_interface_handler(struct nl_msg *msg UNUSED, void *data UNUSED)
 {
@@ -635,39 +631,6 @@ int nl80211_create_monitor(PAirpcapHandle handle, PCHAR Ebuf)
     return 0;
 }
 
-static
-int nl80211_set_monitor(PAirpcapHandle handle, PCHAR Ebuf)
-{
-    struct nl_msg *msg;
-    int err;
-
-    msg = nlmsg_alloc();
-    if (NULL == msg) {
-        setebuf(Ebuf, "Failed to allocate netlink message.");
-        return -1;
-    }
-    
-    genlmsg_put(msg, NL_AUTO_PID, NL_AUTO_SEQ,
-                genl_family_get_id(handle->nl80211), 0, 0, 
-                NL80211_CMD_SET_INTERFACE, 0);
-
-    NLA_PUT_U32(msg, NL80211_ATTR_IFINDEX, handle->ifindex);
-    NLA_PUT_U32(msg, NL80211_ATTR_IFTYPE, NL80211_IFTYPE_MONITOR);
-
-    err = nl_send_and_recv(handle->nl_socket, msg,
-                           cmd_new_interface_handler,
-                           NULL);
-
-    if (err < 0) {
-    nla_put_failure:
-        setebuf(Ebuf, "Failed to set interface %s to monitor mode: %s",
-                handle->monitor_ifname,
-                strerror(-err));
-        return -1;
-    }
-    
-    return 0;
-}
 
 static
 int nl80211_destroy_monitor(PAirpcapHandle handle)
@@ -710,6 +673,47 @@ int nl80211_destroy_monitor(PAirpcapHandle handle)
         return 0;
     }
     return -2;
+}
+#endif
+
+static
+int cmd_set_monitor_handler(struct nl_msg *msg UNUSED, void *data UNUSED)
+{
+    return NL_SKIP;
+}
+
+static
+int nl80211_set_monitor(PAirpcapHandle handle, PCHAR Ebuf)
+{
+    struct nl_msg *msg;
+    int err;
+
+    msg = nlmsg_alloc();
+    if (NULL == msg) {
+        setebuf(Ebuf, "Failed to allocate netlink message.");
+        return -1;
+    }
+    
+    genlmsg_put(msg, NL_AUTO_PID, NL_AUTO_SEQ,
+                genl_family_get_id(handle->nl80211), 0, 0, 
+                NL80211_CMD_SET_INTERFACE, 0);
+
+    NLA_PUT_U32(msg, NL80211_ATTR_IFINDEX, handle->ifindex);
+    NLA_PUT_U32(msg, NL80211_ATTR_IFTYPE, NL80211_IFTYPE_MONITOR);
+
+    err = nl_send_and_recv(handle->nl_socket, msg,
+                           cmd_set_monitor_handler,
+                           NULL);
+
+    if (err < 0) {
+    nla_put_failure:
+        setebuf(Ebuf, "Failed to set interface %s to monitor mode: %s",
+                handle->monitor_ifname,
+                strerror(-err));
+        return -1;
+    }
+    
+    return 0;
 }
 
 /** INTERNAL struct _AirpcapHandle allocator. */
