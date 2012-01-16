@@ -84,6 +84,7 @@ BOOL AirpcapGetDeviceMacFlags(PAirpcapHandle AdapterHandle,
         *PAirpcapMacFlags = AIRPCAP_MF_MONITOR_MODE_ON;
         return TRUE;
     }
+    return FALSE;
 }
 
 BOOL AirpcapSetDeviceMacFlags(PAirpcapHandle AdapterHandle,
