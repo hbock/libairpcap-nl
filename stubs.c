@@ -1,6 +1,7 @@
 /* -*- mode: C; c-file-style: "k&r"; c-basic-offset: 4; indent-tabs-mode: nil; -*- */
 #include "airpcap.h"
 #include "airpcap-nl.h"
+#include "util.h"
 
 /** STUB FUNCTION.  We have no concept of kernel buffers
  * for drivers.
