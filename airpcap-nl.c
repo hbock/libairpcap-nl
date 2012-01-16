@@ -40,6 +40,7 @@
 
 #include "airpcap.h"
 #include "airpcap-nl.h"
+#include "util.h"
 
 #ifdef CONFIG_LIBNL20
 /* /\* libnl 2.0 compatibility code *\/ */
@@ -79,26 +80,6 @@ VOID AirpcapGetVersion(PUINT VersionMajor,
 }
 
 static int
-get_mac_address(struct nl_cache *cache, int ifindex, BYTE *mac)
-{
-    struct nl_addr *addr;
-    struct rtnl_link *link;
-    int err = 0;
-
-    link = rtnl_link_get(cache, ifindex);
-    addr = rtnl_link_get_addr(link);
-
-    unsigned int   link_binary_length;
-    unsigned char *link_binary;
-    link_binary_length = nl_addr_get_len(addr);
-    link_binary        = nl_addr_get_binary_addr(addr);
-
-    memcpy(mac, link_binary, link_binary_length);
-
-    return err;
-}
-
-static int
 nl80211_state_init(PAirpcapHandle handle, PCHAR Ebuf)
 {
     struct nl_sock *rt_sock = NULL;
@@ -132,22 +113,7 @@ nl80211_state_init(PAirpcapHandle handle, PCHAR Ebuf)
         goto err;
     }
 
-    /* Get the NETLINK_ROUTE cache; for now it's
-     * the only thing we need from the route subsystem. */
-    /* TODO: Move me into a global startup routine.
-     * Link information (should) not change! */
-    rt_sock = nl_socket_alloc();
-    err = nl_connect(rt_sock, NETLINK_ROUTE);
-    err = rtnl_link_alloc_cache(rt_sock, &handle->rtnl_link_cache);
-    if (err < 0) {
-        setebuf(Ebuf, "Failed to allocate NETLINK_ROUTE link cache: %s\n",
-                nl_geterror(err));
-        nl_close(rt_sock);
-        goto err;
-    }
-    return get_mac_address(handle->rtnl_link_cache,
-                           handle->ifindex,
-                           handle->mac.Address);
+    return ifconfig_get_hwaddr(handle->master_ifname, handle->mac.Address);
 
     return 0;
 
