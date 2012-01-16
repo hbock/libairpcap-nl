@@ -98,6 +98,7 @@ nl80211_state_init(PAirpcapHandle handle, PCHAR Ebuf)
         setebuf(Ebuf, "Failed to connect to generic netlink.");
         goto err;
     }
+
     if (genl_ctrl_alloc_cache(handle->nl_socket,
                               &handle->nl_cache)) {
         setebuf(Ebuf, "Failed to allocate generic netlink cache.");
@@ -113,7 +114,12 @@ nl80211_state_init(PAirpcapHandle handle, PCHAR Ebuf)
         goto err;
     }
 
-    return ifconfig_get_hwaddr(handle->master_ifname, handle->mac.Address);
+    if (0 != ifconfig_get_hwaddr(handle->master_ifname,
+                                 (uint8_t *)handle->mac.Address)) {
+        setebuf(Ebuf, "Failed to get hardware address: %s",
+                strerror(errno));
+        goto err;
+    }
 
     return 0;
 
@@ -123,9 +129,7 @@ err:
     if (handle->nl_cache)
         nl_cache_free(handle->nl_cache);
     if (handle->nl_socket)
-        nl_socket_free(handle->nl_socket);
-    if (rt_sock)
-        nl_socket_free(rt_sock);
+        nl_handle_destroy(handle->nl_socket);
 
     return -1;
 }
