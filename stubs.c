@@ -1,3 +1,4 @@
+/* -*- mode: C; c-file-style: "k&r"; c-basic-offset: 4; indent-tabs-mode: nil; -*- */
 #include "airpcap.h"
 #include "airpcap-nl.h"
 
@@ -70,5 +71,36 @@ BOOL AirpcapGetLedsNumber(PAirpcapHandle AdapterHandle,
         ret = TRUE;
     }
 
+    return ret;
+}
+
+/* We don't support MF_ACK_FRAMES_ON, yet. Not sure if it's
+ * possible in nl80211. */
+BOOL AirpcapGetDeviceMacFlags(PAirpcapHandle AdapterHandle,
+                              PUINT PAirpcapMacFlags)
+{
+    if (AdapterHandle && PAirpcapMacFlags) {
+        *PAirpcapMacFlags = AIRPCAP_MF_MONITOR_MODE_ON;
+        return TRUE;
+    }
+}
+
+BOOL AirpcapSetDeviceMacFlags(PAirpcapHandle AdapterHandle,
+                              UINT AirpcapMacFlags)
+{
+    BOOL ret = FALSE;
+    if (AdapterHandle) {
+        if (AirpcapMacFlags & ~(AIRPCAP_MF_MONITOR_MODE_ON|AIRPCAP_MF_ACK_FRAMES_ON)) {
+            setebuf(AdapterHandle->last_error, "Invalid argument.");
+        } else if (AirpcapMacFlags & AIRPCAP_MF_ACK_FRAMES_ON) {
+            setebuf(AdapterHandle->last_error, "Frame acknowledgement in monitor mode is not supported.");
+        } else if (0 == (AirpcapMacFlags & AIRPCAP_MF_MONITOR_MODE_ON)) {
+            /* TODO: Look into setting managed mode only. */
+            setebuf(AdapterHandle->last_error, "Monitor mode cannot be disabled.");
+        } else {
+            ret = TRUE;
+        }
+    }
+    
     return ret;
 }
