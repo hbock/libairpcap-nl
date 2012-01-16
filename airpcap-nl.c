@@ -499,6 +499,13 @@ nl80211_device_init(PAirpcapHandle handle, PCHAR Ebuf)
             printf("error getting wiphy: %s\n", handle->last_error);
         }
     }
+    struct airpcap_interface_list *iface = data.start;
+    while (NULL != iface) {
+        struct airpcap_interface_list *next = iface->next;
+        free(iface);
+        iface = next;
+    }
+
     /* TODO : NL80211_CMD_GET_STATION for NL80211_ATTR_WIPHY_FREQ ? */
 
     return err;
@@ -852,7 +859,7 @@ nl80211_get_all_devices(PCHAR Ebuf)
                 strerror(-err));
     }
 
-    for (struct airpcap_interface_list *iface = data.start; iface; iface = iface->next) {
+    for (struct airpcap_interface_list *iface = data.start; NULL != iface; iface = iface->next) {
         PAirpcapDeviceDescription desc;
         PAirpcapHandle temp_handle = NULL;
         char ifname[IF_NAMESIZE];
@@ -919,6 +926,12 @@ nl80211_get_all_devices(PCHAR Ebuf)
         }
         /* Free the temporary handle. */
         airpcap_handle_free(temp_handle);
+    }
+    struct airpcap_interface_list *iface = data.start;
+    while (NULL != iface) {
+        struct airpcap_interface_list *next = iface->next;
+        free(iface);
+        iface = next;
     }
 
 err:
