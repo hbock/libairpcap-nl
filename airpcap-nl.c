@@ -17,8 +17,9 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  */
-/* For strdup(3) */
+/* For strndup(3) */
 #define _BSD_SOURCE
+#define _GNU_SOURCE
 
 #include <errno.h>
 #include <stdio.h>
@@ -56,7 +57,7 @@ static void airpcap_handle_free(PAirpcapHandle handle);
 
 static void setebuf(PCHAR ebuf, const char *format, ...)
 {
-    if (ebuf) {
+    if (NULL != ebuf) {
         va_list args;
         va_start(args, format);
         /* int message_len = strlen(msg);               */
@@ -242,6 +243,8 @@ int wiphy_match_handler(struct nl_msg *msg, void *data)
     int bandidx;
     /* remaining items for nla_for_each_nested */
     int band_rem, freq_rem, rate_rem, mode_rem, cmd_rem;
+    /* monitor interface name to be constructed in nl80211_create_monitor */
+    char pcap_ifname[IFNAMSIZ];
 
     /* parse the generic netlink reply. */
     struct genlmsghdr *gnlh = nlmsg_data(nlmsg_hdr(msg));
@@ -255,9 +258,9 @@ int wiphy_match_handler(struct nl_msg *msg, void *data)
     if (NULL == tb_msg[NL80211_ATTR_WIPHY_BANDS])
         return NL_SKIP;
 
-    if (AIRPCAP_NL_NEW_DEVICE == w->type)
+    if (AIRPCAP_NL_NEW_DEVICE == w->type) {
         handle = w->handle;
-    else {
+    } else {
         /* Temporary handle, just for this callback.
          */
         handle = airpcap_handle_new();
@@ -278,14 +281,8 @@ int wiphy_match_handler(struct nl_msg *msg, void *data)
             w->current = desc;
         }
 
-        /* Assign device WIPHY_NAME to the "Name" attribute.
-         * Description is assigned after we heuristically
-         * emulate the various Airpcap models. */
-        if (tb_msg[NL80211_ATTR_WIPHY_NAME]) {
-            desc->Name = strdup(nla_get_string(tb_msg[NL80211_ATTR_WIPHY_NAME]));
-        }
+        desc->Name = strndup(pcap_ifname, IFNAMSIZ);
     }
-
 
     handle->channel_info_count = 0;
     int freq_count = 0;
@@ -551,6 +548,157 @@ nl80211_device_init(PAirpcapHandle handle, PCHAR Ebuf)
     return err;
 }
 
+static
+int cmd_new_interface_handler(struct nl_msg *msg, void *data)
+{
+    printf("CMD_NEW_INTERFACE OK!\n");
+    return NL_SKIP;
+}
+static
+int cmd_del_interface_handler(struct nl_msg *msg, void *data)
+{
+    printf("CMD_DEL_INTERFACE OK!\n");
+    return NL_SKIP;
+}
+
+/* adapted (lifted) from lorcon2 nl80211_create_vap */
+static
+int nl80211_create_monitor(PAirpcapHandle handle, PCHAR Ebuf)
+{
+    struct genl_family *nl80211;
+    struct nl_msg *msg;
+    int err;
+
+    /* Check if this interface already exists. */
+    handle->monitor_ifindex = if_nametoindex(handle->monitor_ifname);
+    if (0 != handle->monitor_ifindex) {
+        /* TODO: Check to make sure it is the correct wiphy and
+         * already in IFTYPE_MONITOR */
+        return 0;
+    }
+    
+    msg = nlmsg_alloc();
+    if (NULL == msg) {
+        setebuf(Ebuf, "Failed to allocate netlink message.");
+        return -1;
+    }
+    
+    genlmsg_put(msg, NL_AUTO_PID, NL_AUTO_SEQ,
+                genl_family_get_id(handle->nl80211), 0, 0, 
+                NL80211_CMD_NEW_INTERFACE, 0);
+
+    NLA_PUT_U32(msg,    NL80211_ATTR_IFINDEX, handle->ifindex);
+    NLA_PUT_STRING(msg, NL80211_ATTR_IFNAME, handle->monitor_ifname);
+    NLA_PUT_U32(msg,    NL80211_ATTR_IFTYPE, NL80211_IFTYPE_MONITOR);
+
+    err = nl_send_and_recv(handle->nl_socket, msg,
+                           cmd_new_interface_handler,
+                           NULL);
+
+    /* PROTIP: If you get -ENFILE (-23 / Too many open files in system),
+     * it's (likely) because the interface already exists.
+     * Why doesn't it return -EEXIST?!
+     */
+    if (err < 0) {
+    nla_put_failure:
+        setebuf(Ebuf, "Failed to create monitor interface %s from %s: %s",
+                handle->monitor_ifname,
+                handle->master_ifname,
+                strerror(-err));
+        return -1;
+    }
+
+    /* Save this ifindex */
+    handle->monitor_ifindex = if_nametoindex(handle->monitor_ifname);
+    if (0 == handle->monitor_ifindex) {
+        setebuf(Ebuf,
+                "nl80211_create_monitor() thought we made a "
+                "monitor interface, but it wasn't there when we looked");
+        return -1;
+    }
+    
+    return 0;
+}
+
+static
+int nl80211_set_monitor(PAirpcapHandle handle, PCHAR Ebuf)
+{
+    struct genl_family *nl80211;
+    struct nl_msg *msg;
+    int err;
+
+    msg = nlmsg_alloc();
+    if (NULL == msg) {
+        setebuf(Ebuf, "Failed to allocate netlink message.");
+        return -1;
+    }
+    
+    genlmsg_put(msg, NL_AUTO_PID, NL_AUTO_SEQ,
+                genl_family_get_id(handle->nl80211), 0, 0, 
+                NL80211_CMD_SET_INTERFACE, 0);
+
+    NLA_PUT_U32(msg, NL80211_ATTR_IFINDEX, handle->ifindex);
+    NLA_PUT_U32(msg, NL80211_ATTR_IFTYPE, NL80211_IFTYPE_MONITOR);
+
+    err = nl_send_and_recv(handle->nl_socket, msg,
+                           cmd_new_interface_handler,
+                           NULL);
+
+    if (err < 0) {
+    nla_put_failure:
+        setebuf(Ebuf, "Failed to set interface %s to monitor mode: %s",
+                handle->monitor_ifname,
+                strerror(-err));
+        return -1;
+    }
+    
+    return 0;
+}
+
+static
+int nl80211_destroy_monitor(PAirpcapHandle handle)
+{
+    unsigned monitor_ifindex = if_nametoindex(handle->monitor_ifname);
+    if (0 != monitor_ifindex) {
+        /* NL80211_CMD_DEL_INTERFACE
+         *  - NL80211_ATTR_IFINDEX
+         */
+        struct genl_family *nl80211;
+        struct nl_msg *msg;
+        int err;
+
+        msg = nlmsg_alloc();
+        if (NULL == msg) {
+            setebuf(handle->last_error, "Failed to allocate netlink message.");
+            return -1;
+        }
+    
+        genlmsg_put(msg, 0, 0,//NL_AUTO_PID, NL_AUTO_SEQ,
+                    genl_family_get_id(handle->nl80211), 0, 0, 
+                    NL80211_CMD_DEL_INTERFACE, 0);
+
+        NLA_PUT_U32(msg, NL80211_ATTR_IFINDEX, monitor_ifindex);
+
+        err = nl_send_and_recv(handle->nl_socket, msg,
+                               cmd_del_interface_handler,
+                               NULL);
+
+        if (err < 0) {
+        nla_put_failure:
+            /* -ESRCH == "No such process"...? if ifindex cannot be found */
+            setebuf(handle->last_error,
+                    "Failed to delete monitor interface %s(%u): %s",
+                    handle->monitor_ifname, monitor_ifindex,
+                    strerror(-err));
+            return -1;
+        }
+
+        handle->monitor_ifindex = 0;
+        return 0;
+    }
+    return -2;
+}
+
 /** INTERNAL struct _AirpcapHandle allocator. */
 static PAirpcapHandle
 airpcap_handle_new(void)
@@ -592,6 +740,10 @@ PAirpcapHandle AirpcapOpen(PCHAR DeviceName, PCHAR Ebuf)
 {
     PAirpcapHandle handle;
 
+    if (NULL != Ebuf) {
+        Ebuf[0] = 0;
+    }
+
     unsigned ifindex = if_nametoindex((char *)DeviceName);
     if (ifindex <= 0) {
         setebuf(Ebuf, "Invalid device specified.");
@@ -605,6 +757,8 @@ PAirpcapHandle AirpcapOpen(PCHAR DeviceName, PCHAR Ebuf)
     }
     /* Assign interface index after allocation. */
     handle->ifindex = ifindex;
+    /* FIXME: handle if name + "mon" is too long for IFNAMSIZ. */
+    strncpy(handle->master_ifname, DeviceName, IFNAMSIZ);
     
     /* Initialize unique netlink/nl80211 connection and
      * state for this handle. */
@@ -613,6 +767,12 @@ PAirpcapHandle AirpcapOpen(PCHAR DeviceName, PCHAR Ebuf)
     }
     /* FIXME: proper deallocation. */
     if (-1 == nl80211_device_init(handle, Ebuf)) {
+        return NULL;
+    }
+    /* if (-1 == nl80211_create_monitor(handle, Ebuf)) { */
+    /*     return NULL; */
+    /* } */
+    if (-1 == nl80211_set_monitor(handle, Ebuf)) {
         return NULL;
     }
 
@@ -641,11 +801,16 @@ void nl80211_state_free(PAirpcapHandle handle)
 
 VOID AirpcapClose(PAirpcapHandle AdapterHandle)
 {
-    if (AdapterHandle) {
+    if (NULL != AdapterHandle) {
+        /* For now, don't destroy the monitor, to allow phyNmon interfaces
+         * to persist after AirpcapClose. Perhaps add a libairpcap-nl API call
+         * to destroy the VIF? lorcon does not destroy the interface, in any
+         * case. */
+        //nl80211_destroy_monitor(AdapterHandle);
         nl80211_state_free(AdapterHandle);
         if (AdapterHandle->rtnl_link_cache)
             nl_cache_free(AdapterHandle->rtnl_link_cache);
-                
+
         airpcap_handle_free(AdapterHandle);
     }
 }
@@ -658,7 +823,6 @@ PCHAR AirpcapGetLastError(PAirpcapHandle AdapterHandle)
     }
     return ret;
 }
-
 
 static PAirpcapDeviceDescription
 nl80211_get_all_devices(PCHAR Ebuf)

@@ -38,10 +38,16 @@ struct _AirpcapHandle {
 
     /* Interface index (net/if.h:if_nametoindex(3)) */
     unsigned ifindex;
+    unsigned monitor_ifindex;
+
+    /* FIXME: Is the phy ifname bounded by IFNAMSIZ? */
+    char phy_ifname[IFNAMSIZ];
+    char master_ifname[IFNAMSIZ];
+    char monitor_ifname[IFNAMSIZ];
 
     /* Airpcap parameters. */
     CHAR last_error[AIRPCAP_ERRBUF_SIZE];
-
+    
     AirpcapDeviceCapabilities cap;
     AirpcapMacAddress mac;
     /* For AirpcapGetLedsNumber */
