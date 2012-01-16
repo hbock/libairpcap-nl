@@ -39,6 +39,7 @@ struct _AirpcapHandle {
     /* Interface index (net/if.h:if_nametoindex(3)) */
     unsigned ifindex;
     unsigned monitor_ifindex;
+    unsigned int phyindex;
 
     /* FIXME: Is the phy ifname bounded by IFNAMSIZ? */
     char phy_ifname[IFNAMSIZ];
