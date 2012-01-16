@@ -41,13 +41,6 @@
 #include "airpcap-nl.h"
 #include "util.h"
 
-#ifdef CONFIG_LIBNL20
-/* /\* libnl 2.0 compatibility code *\/ */
-/* #define nl_handle nl_sock */
-/* #define nl_handle_alloc_cb nl_socket_alloc_cb */
-/* #define nl_handle_destroy nl_socket_free */
-#endif /* CONFIG_LIBNL20 */
-
 static PAirpcapHandle airpcap_handle_new(void);
 static void airpcap_handle_free(PAirpcapHandle handle);
 static int wiphy_match_handler(struct nl_msg *msg, void *data);
@@ -66,10 +59,7 @@ VOID AirpcapGetVersion(PUINT VersionMajor,
 static int
 nl80211_state_init(PAirpcapHandle handle, PCHAR Ebuf)
 {
-    struct nl_sock *rt_sock = NULL;
-    int err;
-
-    handle->nl_socket = nl_socket_alloc();
+    handle->nl_socket = nl_handle_alloc();
     /* Allocate the netlink socket.
      */
     if (NULL == handle->nl_socket) {
@@ -158,7 +148,7 @@ struct airpcap_interface_dump_data {
 };
 
 static int
-nl80211_get_wiphy(struct nl_sock *sock,
+nl80211_get_wiphy(struct nl_handle *sock,
                   struct genl_family *family,
                   PAirpcapHandle handle);
 
@@ -387,7 +377,7 @@ int wiphy_match_handler(struct nl_msg *msg, void *data)
 
 /* Adapted from hostapd/src/drivers/driver_nl80211.c. */
 static int
-nl_send_and_recv(struct nl_sock *sock,
+nl_send_and_recv(struct nl_handle *sock,
                  struct nl_msg *msg,
                  nl_recvmsg_msg_cb_t valid_handler,
                  //int (*valid_handler)(struct nl_msg *, void *),
@@ -431,7 +421,7 @@ send_and_recv_done:
 }
 
 static int
-nl80211_get_wiphy(struct nl_sock *sock,
+nl80211_get_wiphy(struct nl_handle *sock,
                   struct genl_family *family,
                   PAirpcapHandle handle)
 {
@@ -743,14 +733,23 @@ PAirpcapHandle AirpcapOpen(PCHAR DeviceName, PCHAR Ebuf)
     /* if (-1 == nl80211_create_monitor(handle, Ebuf)) { */
     /*     return NULL; */
     /* } */
+    /* We might as well just call close here, since
+     * all state is essentially allocated and ready.
+     */
     if (-1 == nl80211_set_monitor(handle, Ebuf)) {
+        AirpcapClose(handle);
         return NULL;
     }
 
+    /* Finally, bring the device up (and leave it up - do not bring
+     * down the interface in AirpcapClose!). */
+    if (-1 == ifconfig_ifupdown(handle->master_ifname, 1)) {
+        setebuf(Ebuf, "Unable to bring interface up: %s", strerror(errno));
+        AirpcapClose(handle);
+        return NULL;
+    }
+    
     if (FALSE == AirpcapSetDeviceChannel(handle, 6)) {
-        /* We might as well just call close here, since
-         * all state is essentially allocated and ready.
-         */
         strncpy(Ebuf, handle->last_error, AIRPCAP_ERRBUF_SIZE);
         AirpcapClose(handle);
         return NULL;
@@ -766,7 +765,7 @@ void nl80211_state_free(PAirpcapHandle handle)
         nl_cb_put(handle->nl_cb);
         genl_family_put(handle->nl80211);
         nl_cache_free(handle->nl_cache);
-        nl_socket_free(handle->nl_socket);
+        nl_handle_destroy(handle->nl_socket);
     }
 }
 
@@ -800,12 +799,12 @@ nl80211_get_all_devices(PCHAR Ebuf)
 {
     int err;
     struct nl_msg *msg;
-    struct nl_sock *sock = NULL;
+    struct nl_handle *sock = NULL;
     struct nl_cache *cache;
     struct genl_family *nl80211;
     PAirpcapDeviceDescription desc_start = NULL, desc_current;
 
-    sock = nl_socket_alloc();
+    sock = nl_handle_alloc();
     /* Allocate the netlink socket.
      */
     if (NULL == sock) {
@@ -928,7 +927,7 @@ err:
     if (cache)
         nl_cache_free(cache);
     if (sock)
-        nl_socket_free(sock);
+        nl_handle_destroy(sock);
 
     if (err < 0) {
         return NULL;

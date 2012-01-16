@@ -2,7 +2,7 @@
 /*
  * Airpcap library implementation for nl80211
  *
- * Copyright 2011 Harry Bock <bock.harryw@gmail.com>
+ * Copyright 2011-2012 Harry Bock <bock.harryw@gmail.com>
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -23,11 +23,30 @@
 #include <netlink/genl/family.h>
 #include <netlink/netlink.h>
 
+#ifdef CONFIG_LIBNL20
+/* libnl 2.0 compatibility code, because UNIX APIs are never
+ * stable. This is ridiculous. */
+#define nl_handle nl_sock
+#define nl_handle_destroy nl_sock_free
+
+#else
+
+static inline int __genl_ctrl_alloc_cache(struct nl_handle *h, struct nl_cache **cache) {
+	struct nl_cache *tmp = genl_ctrl_alloc_cache(h);
+	if (!tmp)
+		return -1;
+	*cache = tmp;
+	return 0;
+}
+#define genl_ctrl_alloc_cache __genl_ctrl_alloc_cache
+
+#endif /* CONFIG_LIBNL20 */
+
 const UINT AIRPCAP_DEFAULT_KERNEL_BUFFER_SIZE = 1024000;
 
 struct _AirpcapHandle {
     /* Internal netlink state. */
-    struct nl_sock     *nl_socket;
+    struct nl_handle     *nl_socket;
     struct nl_cache    *nl_cache;
     struct genl_family *nl80211;
     struct nl_cb       *nl_cb;
