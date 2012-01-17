@@ -39,3 +39,8 @@ target_link_libraries (airpcap-nl ${SOLIBS})
 
 add_executable (driver driver.c)
 target_link_libraries (driver airpcap-nl pcap)
+
+install (
+  TARGETS airpcap-nl
+  LIBRARY DESTINATION lib
+)
