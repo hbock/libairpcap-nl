@@ -7,11 +7,6 @@ set (airpcap_VERSION_MINOR 1)
 set (airpcap_VERSION_REV   1)
 set (airpcap_VERSION_BUILD 1)
 
-configure_file (
-  "${PROJECT_SOURCE_DIR}/airpcap-nl-config.h.in"
-  "${PROJECT_BINARY_DIR}/airpcap-nl-config.h"
-)
-
 include_directories ("${PROJECT_BINARY_DIR}")
 add_definitions (-std=c99 -Wall -Wextra -g -O0 -D_GNU_SOURCE)
 find_library (NL_LIBRARY nl)
@@ -19,19 +14,21 @@ find_library (NL_GENL_LIBRARY nl-genl)
 
 # libnl-genl is merged with libnl for version 1, so use
 # this to detect which nl we have.
-if (${NL_GENL_LIBRARY})
-  set (CONFIG_LIBNL20 ON)
-else (${NL_GENL_LIBRARY})
-  set (CONFIG_LIBNL20 OFF)
-endif (${NL_GENL_LIBRARY})
+if (NL_GENL_LIBRARY)
+  message("libnl 2 found, linking against -lnl -lnl-genl")
+  set (SOLIBS ${SOLIBS} nl nl-genl)
+  set (CONFIG_LIBNL20 TRUE)
+else (NL_GENL_LIBRARY)
+  message("libnl 1 found, linking against -lnl")
+  set (SOLIBS ${SOLIBS} nl)
+  set (CONFIG_LIBNL20 FALSE)
+endif (NL_GENL_LIBRARY)
 
-if (CONFIG_LIBNL20)
-   message("libnl 2 found, linking against -lnl -lnl-genl")
-   set (SOLIBS ${SOLIBS} nl nl-genl)
-else (CONFIG_LIBNL20) # no libnl2
-   message("libnl 1 found, linking against -lnl")
-   set (SOLIBS ${SOLIBS} nl)
-endif (CONFIG_LIBNL20)
+# Generate this after determining libnl version
+configure_file (
+  "${PROJECT_SOURCE_DIR}/airpcap-nl-config.h.in"
+  "${PROJECT_BINARY_DIR}/airpcap-nl-config.h"
+)
 
 set (airpcap_nl_source airpcap-nl.c stubs.c util.c)
 
