@@ -30,7 +30,8 @@
 /* libnl 2.0 compatibility code, because UNIX APIs are never
  * stable. This is ridiculous. */
 #define nl_handle nl_sock
-#define nl_handle_destroy nl_sock_free
+#define nl_handle_alloc nl_socket_alloc
+#define nl_handle_destroy nl_socket_free
 
 #else
 
