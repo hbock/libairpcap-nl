@@ -50,10 +50,10 @@ VOID AirpcapGetVersion(PUINT VersionMajor,
 		       PUINT VersionRev,
 		       PUINT VersionBuild)
 {
-    *VersionMajor = 4;
-    *VersionMinor = 1;
-    *VersionRev   = 1;
-    *VersionBuild = 0;
+    *VersionMajor = AIRPCAP_VERSION_MAJOR;
+    *VersionMinor = AIRPCAP_VERSION_MINOR;
+    *VersionRev   = AIRPCAP_VERSION_REV;
+    *VersionBuild = AIRPCAP_VERSION_BUILD;
 }
 
 static int
