@@ -17,17 +17,22 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  */
-#ifndef __APCAP_AIRPCAP_NL_H
+#ifndef __AIRPCAP_NL_H__
+#define __AIRPCAP_NL_H__
 
 #include <netlink/genl/genl.h>
 #include <netlink/genl/family.h>
+#include <netlink/genl/ctrl.h>
 #include <netlink/netlink.h>
+
+#include "airpcap-nl-config.h"
 
 #ifdef CONFIG_LIBNL20
 /* libnl 2.0 compatibility code, because UNIX APIs are never
  * stable. This is ridiculous. */
 #define nl_handle nl_sock
-#define nl_handle_destroy nl_sock_free
+#define nl_handle_alloc nl_socket_alloc
+#define nl_handle_destroy nl_socket_free
 
 #else
 
@@ -42,7 +47,7 @@ static inline int __genl_ctrl_alloc_cache(struct nl_handle *h, struct nl_cache *
 
 #endif /* CONFIG_LIBNL20 */
 
-const UINT AIRPCAP_DEFAULT_KERNEL_BUFFER_SIZE = 1024000;
+#define AIRPCAP_DEFAULT_KERNEL_BUFFER_SIZE 1024000
 
 struct _AirpcapHandle {
     /* Internal netlink state. */
@@ -389,4 +394,4 @@ static const AirpcapInternalChannelInfo g_Channels[] =
 	{4995, 199, AIRPCAP_CB_4_GHZ}
 };
 
-#endif /* __APCAP_AIRPCAP_NL_H */
+#endif /* __AIRPCAP_NL_H__ */
