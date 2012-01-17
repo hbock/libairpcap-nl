@@ -22,6 +22,7 @@
 
 #include <netlink/genl/genl.h>
 #include <netlink/genl/family.h>
+#include <netlink/genl/ctrl.h>
 #include <netlink/netlink.h>
 
 #include "airpcap-nl-config.h"
