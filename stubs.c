@@ -111,10 +111,7 @@ BOOL AirpcapGetStats(PAirpcapHandle AdapterHandle, PAirpcapStats PStats UNUSED)
 {
     if (AdapterHandle) {
         setebuf(AdapterHandle->last_error, "GetStats is not supported. Use libpcap.");
-    } else {
-        setebuf(AdapterHandle->last_error, "Invalid adapter handle pointer.");
     }
-
     return FALSE;
 }
 
@@ -123,10 +120,7 @@ BOOL AirpcapGetDeviceTimestamp(PAirpcapHandle AdapterHandle,
 {
     if (AdapterHandle) {
         setebuf(AdapterHandle->last_error, "GetDeviceTimestamp is not yet supported.");
-    } else {
-        setebuf(AdapterHandle->last_error, "Invalid adapter handle pointer.");
     }
-
     return FALSE;
 }
 
@@ -142,8 +136,6 @@ BOOL AirpcapGetLinkType(PAirpcapHandle AdapterHandle,
         } else {
             setebuf(AdapterHandle->last_error, "Invalid link type pointer.");
         }
-    } else {
-        setebuf(AdapterHandle->last_error, "Invalid adapter handle pointer.");
     }
 
     return ret;
@@ -171,8 +163,6 @@ BOOL AirpcapSetLinkType(PAirpcapHandle AdapterHandle,
             setebuf(AdapterHandle->last_error, "Invalid link type %d", LinkType);
             break;
         }
-    } else {
-        setebuf(AdapterHandle->last_error, "Invalid adapter handle pointer.");
     }
 
     return ret;
@@ -188,8 +178,6 @@ BOOL AirpcapSetFcsPresence(PAirpcapHandle AdapterHandle, BOOL IsFcsPresent)
         } else {
             setebuf(AdapterHandle->last_error, "Cannot disable FCS at end of frame.");
         }
-    } else {
-        setebuf(AdapterHandle->last_error, "Invalid adapter handle pointer.");
     }
 
     return ret;
@@ -204,8 +192,6 @@ BOOL AirpcapGetFcsPresence(PAirpcapHandle AdapterHandle, PBOOL PIsFcsPresent)
         } else {
             setebuf(AdapterHandle->last_error, "Invalid FCS presence flag pointer.");
         }
-    } else {
-        setebuf(AdapterHandle->last_error, "Invalid adapter handle pointer.");
     }
 
     return ret;
