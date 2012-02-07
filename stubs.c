@@ -106,3 +106,107 @@ BOOL AirpcapSetDeviceMacFlags(PAirpcapHandle AdapterHandle,
     
     return ret;
 }
+
+BOOL AirpcapGetStats(PAirpcapHandle AdapterHandle, PAirpcapStats PStats UNUSED)
+{
+    if (AdapterHandle) {
+        setebuf(AdapterHandle->last_error, "GetStats is not supported. Use libpcap.");
+    } else {
+        setebuf(AdapterHandle->last_error, "Invalid adapter handle pointer.");
+    }
+
+    return FALSE;
+}
+
+BOOL AirpcapGetDeviceTimestamp(PAirpcapHandle AdapterHandle,
+                               PAirpcapDeviceTimestamp PTimestamp UNUSED)
+{
+    if (AdapterHandle) {
+        setebuf(AdapterHandle->last_error, "GetDeviceTimestamp is not yet supported.");
+    } else {
+        setebuf(AdapterHandle->last_error, "Invalid adapter handle pointer.");
+    }
+
+    return FALSE;
+}
+
+/* We do not support PPI headers or without radiotap headers. */
+BOOL AirpcapGetLinkType(PAirpcapHandle AdapterHandle,
+                        PAirpcapLinkType PLinkType)
+{
+    BOOL ret = FALSE;
+    if (AdapterHandle) {
+        if (PLinkType) {
+            *PLinkType = AIRPCAP_LT_802_11_PLUS_RADIO;
+            ret = TRUE;
+        } else {
+            setebuf(AdapterHandle->last_error, "Invalid link type pointer.");
+        }
+    } else {
+        setebuf(AdapterHandle->last_error, "Invalid adapter handle pointer.");
+    }
+
+    return ret;
+}
+
+BOOL AirpcapSetLinkType(PAirpcapHandle AdapterHandle,
+                        AirpcapLinkType LinkType)
+{
+    BOOL ret = FALSE;
+    if (AdapterHandle) {
+        switch(LinkType) {
+        case AIRPCAP_LT_802_11_PLUS_RADIO:
+            ret = TRUE;
+            break;
+
+        case AIRPCAP_LT_802_11:
+            setebuf(AdapterHandle->last_error, "Link type LT_802_11 not supported.");
+            break;
+
+        case AIRPCAP_LT_802_11_PLUS_PPI:
+            setebuf(AdapterHandle->last_error, "Link type LT_802_11_PLUS_PPI not supported.");
+            break;
+
+        default:
+            setebuf(AdapterHandle->last_error, "Invalid link type %d", LinkType);
+            break;
+        }
+    } else {
+        setebuf(AdapterHandle->last_error, "Invalid adapter handle pointer.");
+    }
+
+    return ret;
+}
+
+/* TOCHECK: mac80211 always appends FCS to end of monitor frame, right? */
+BOOL AirpcapSetFcsPresence(PAirpcapHandle AdapterHandle, BOOL IsFcsPresent)
+{
+    BOOL ret = FALSE;
+    if (AdapterHandle) {
+        if (TRUE == IsFcsPresent) {
+            ret = TRUE;
+        } else {
+            setebuf(AdapterHandle->last_error, "Cannot disable FCS at end of frame.");
+        }
+    } else {
+        setebuf(AdapterHandle->last_error, "Invalid adapter handle pointer.");
+    }
+
+    return ret;
+}
+BOOL AirpcapGetFcsPresence(PAirpcapHandle AdapterHandle, PBOOL PIsFcsPresent)
+{
+    BOOL ret = FALSE;
+    if (AdapterHandle) {
+        if (PIsFcsPresent) {
+            *PIsFcsPresent = TRUE;
+            ret = TRUE;
+        } else {
+            setebuf(AdapterHandle->last_error, "Invalid FCS presence flag pointer.");
+        }
+    } else {
+        setebuf(AdapterHandle->last_error, "Invalid adapter handle pointer.");
+    }
+
+    return ret;
+}
