@@ -81,6 +81,7 @@ struct _AirpcapHandle {
     UINT channel_info_count;
 
     AirpcapChannelInfo current_channel;
+    AirpcapValidationType validation;
 };
 
 #define UNUSED __attribute__((unused))

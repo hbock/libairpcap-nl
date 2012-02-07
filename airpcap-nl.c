@@ -634,9 +634,9 @@ int cmd_set_monitor_handler(struct nl_msg *msg UNUSED, void *data UNUSED)
 }
 
 static
-int nl80211_set_monitor(PAirpcapHandle handle, PCHAR Ebuf)
+int nl80211_set_monitor(PAirpcapHandle handle, AirpcapValidationType validation, PCHAR Ebuf)
 {
-    struct nl_msg *msg;
+    struct nl_msg *msg, *flags;
     int err;
 
     msg = nlmsg_alloc();
@@ -644,7 +644,11 @@ int nl80211_set_monitor(PAirpcapHandle handle, PCHAR Ebuf)
         setebuf(Ebuf, "Failed to allocate netlink message.");
         return -1;
     }
-    
+    flags = nlmsg_alloc();
+    if (NULL == flags) {
+        setebuf(Ebuf, "Failed to allocate flags netlink message.");
+        return -1;
+    }
     genlmsg_put(msg, NL_AUTO_PID, NL_AUTO_SEQ,
                 genl_family_get_id(handle->nl80211), 0, 0, 
                 NL80211_CMD_SET_INTERFACE, 0);
@@ -652,19 +656,58 @@ int nl80211_set_monitor(PAirpcapHandle handle, PCHAR Ebuf)
     NLA_PUT_U32(msg, NL80211_ATTR_IFINDEX, handle->ifindex);
     NLA_PUT_U32(msg, NL80211_ATTR_IFTYPE, NL80211_IFTYPE_MONITOR);
 
+    /* We always want other BSS frames and control frames. */
+    NLA_PUT_FLAG(flags, NL80211_MNTR_FLAG_CONTROL);
+    NLA_PUT_FLAG(flags, NL80211_MNTR_FLAG_OTHER_BSS);
+    /* If we want to accept EVERYTHING, we need to accept FCS-failed
+     * frames.  Not sure if we should accept PLCP-failed frames, but
+     * everything is everything, right? */
+    switch (validation) {
+    case AIRPCAP_VT_ACCEPT_EVERYTHING:
+        NLA_PUT_FLAG(flags, NL80211_MNTR_FLAG_FCSFAIL);
+        NLA_PUT_FLAG(flags, NL80211_MNTR_FLAG_PLCPFAIL);
+        break;
+
+    case AIRPCAP_VT_ACCEPT_CORRECT_FRAMES:
+        /* No flags */
+        break;
+
+    case AIRPCAP_VT_ACCEPT_CORRUPT_FRAMES:
+        /* TODO: this may be complicated - FLAG_COOK_FRAMES means frames
+         * after processing (i.e., not consumed by any other interface), so
+         * we COULD hack this in by creating an interface that does
+         * AIRPCAP_VT_ACCEPT_CORRECT and make this MNTR_FLAG_COOK_FRAMES with
+         * MNTR_FLAG_FCSFAIL/PLCPFAIL.  That MAY let us only see corrupt frames.
+         *
+         * For now, do nothing.
+         */
+        break;
+
+    default:
+        setebuf(Ebuf, "Invalid validation type %d used - bug!", validation);
+        goto nla_put_failure;
+    }
+
+    nla_put_nested(msg, NL80211_ATTR_MNTR_FLAGS, flags);
+
     err = nl_send_and_recv(handle->nl_socket, msg,
                            cmd_set_monitor_handler,
                            NULL);
 
     if (err < 0) {
-    nla_put_failure:
         setebuf(Ebuf, "Failed to set interface %s to monitor mode: %s",
                 handle->master_ifname,
                 strerror(-err));
         return -1;
     }
+    handle->validation = validation;
     
     return 0;
+
+nla_put_failure:
+    nlmsg_free(msg);
+    nlmsg_free(flags);
+    return -1;
 }
 
 /** INTERNAL struct _AirpcapHandle allocator. */
@@ -727,7 +770,7 @@ PAirpcapHandle AirpcapOpen(PCHAR DeviceName, PCHAR Ebuf)
     handle->ifindex = ifindex;
     /* FIXME: handle if name + "mon" is too long for IF_NAMESIZE. */
     strncpy(handle->master_ifname, DeviceName, IF_NAMESIZE);
-    
+
     /* Initialize unique netlink/nl80211 connection and
      * state for this handle. */
     if (-1 == nl80211_state_init(handle, Ebuf)) {
@@ -740,10 +783,12 @@ PAirpcapHandle AirpcapOpen(PCHAR DeviceName, PCHAR Ebuf)
     /* if (-1 == nl80211_create_monitor(handle, Ebuf)) { */
     /*     return NULL; */
     /* } */
-    /* We might as well just call close here, since
-     * all state is essentially allocated and ready.
+    /* By default, we must set to accept everything, as noted is the default.
      */
-    if (-1 == nl80211_set_monitor(handle, Ebuf)) {
+    if (-1 == nl80211_set_monitor(handle, AIRPCAP_VT_ACCEPT_EVERYTHING, Ebuf)) {
+        /* We might as well just call close here, since
+         * all state is essentially allocated and ready.
+         */
         AirpcapClose(handle);
         return NULL;
     }
@@ -1094,6 +1139,61 @@ BOOL AirpcapSetDeviceChannelEx(PAirpcapHandle AdapterHandle,
             ret = TRUE;
         }
     }
+    return ret;
+}
+
+BOOL AirpcapSetFcsValidation(PAirpcapHandle AdapterHandle,
+                             AirpcapValidationType ValidationType)
+{
+    BOOL ret = FALSE;
+
+    if (AdapterHandle) {
+        switch(ValidationType) {
+        case AIRPCAP_VT_ACCEPT_EVERYTHING:
+            ret = TRUE;
+            break;
+
+        case AIRPCAP_VT_ACCEPT_CORRECT_FRAMES:
+            ret = TRUE;
+            break;
+
+        case AIRPCAP_VT_ACCEPT_CORRUPT_FRAMES:
+            /* TODO: This could very well be done if NL80211_MNTR_FLAG_COOK_FRAMES does
+             * what I think it does. It deserves investigation at a later date, but for
+             * now we do not support it. */
+            setebuf(AdapterHandle->last_error, "VT_ACCEPT_CORRUPT_FRAMES is not supported.");
+            break;
+
+        default:
+            setebuf(AdapterHandle->last_error, "Invalid ValidationType %d.", ValidationType);
+            break;
+        }
+    }
+    /* Assuming ValidationType was valid and we successfully set up the
+     * device for that validation mode, we can actually set the internal
+     * state. */
+    if (TRUE == ret) {
+        if (-1 == nl80211_set_monitor(AdapterHandle, ValidationType, AdapterHandle->last_error)) {
+            ret = FALSE;
+        }
+    }
+
+    
+    
+    return ret;
+}
+
+BOOL AirpcapGetFcsValidation(PAirpcapHandle AdapterHandle,
+                             PAirpcapValidationType PValidationType)
+{
+    BOOL ret = FALSE;
+    if (AdapterHandle) {
+        if (PValidationType) {
+            *PValidationType = AdapterHandle->validation;
+            ret = TRUE;
+        }
+    }
+
     return ret;
 }
 

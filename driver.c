@@ -128,6 +128,19 @@ void test(PCHAR name)
         printf("AirpcapSetDeviceChannelEx failed: %s", AirpcapGetLastError(handle));
     }
 
+    AirpcapValidationType validation;
+    if (FALSE == AirpcapGetFcsValidation(handle, &validation)) {
+        printf("AirpcapGetFcsValidation failed: %s", AirpcapGetLastError(handle));
+    } else {
+        if (AIRPCAP_VT_ACCEPT_EVERYTHING != validation) {
+            printf("FAILED: AirpcapGetFcsValidation initially returns %d, "
+                   "not VT_ACCEPT_EVERYTHING!\n", validation);
+        } else {
+            printf("PASSED: AirpcapGetFcsValidation initially returned "
+                   "VT_ACCEPT_EVERYTHING.\n");
+        }
+    }
+
     printf("Attempting libpcap test.\n");
     libpcap_test(handle, name);
     
