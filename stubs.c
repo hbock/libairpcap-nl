@@ -196,3 +196,45 @@ BOOL AirpcapGetFcsPresence(PAirpcapHandle AdapterHandle, PBOOL PIsFcsPresent)
 
     return ret;
 }
+
+BOOL AirpcapSetFilter(PAirpcapHandle AdapterHandle,
+                      PVOID Instructions UNUSED,
+                      UINT Len UNUSED)
+{
+    if (AdapterHandle) {
+        setebuf(AdapterHandle->last_error, "AirpcapSetFilter is not supported. Use libpcap.");
+    }
+    return FALSE;
+}
+
+/* TODO: This can be implemented. */
+BOOL AirpcapSetMacAddress(PAirpcapHandle AdapterHandle,
+                          PAirpcapMacAddress PMacAddress UNUSED)
+{
+    if (AdapterHandle) {
+        setebuf(AdapterHandle->last_error, "AirpcapSetMacAddress is not yet supported.");
+    }
+    return FALSE;
+}
+
+BOOL AirpcapGetReadEvent(PAirpcapHandle AdapterHandle,
+                         HANDLE *PReadEvent UNUSED)
+{
+    if (AdapterHandle) {
+        setebuf(AdapterHandle->last_error,
+                "AirpcapGetReadEvent is not supported; use "
+                "pcap_get_selectable_fd() instead.");
+    }
+    return FALSE;
+}
+
+BOOL AirpcapRead(PAirpcapHandle AdapterHandle,
+                 PBYTE Buffer UNUSED,
+                 UINT BufSize UNUSED,
+                 PUINT PReceivedBytes UNUSED)
+{
+    if (AdapterHandle) {
+        setebuf(AdapterHandle->last_error, "AirpcapRead is not supported; use libpcap instead.");
+    }
+    return FALSE;
+}
