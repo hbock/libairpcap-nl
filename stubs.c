@@ -238,3 +238,52 @@ BOOL AirpcapRead(PAirpcapHandle AdapterHandle,
     }
     return FALSE;
 }
+
+/* We never decrypt in hardware. This is the responsibility of the user of libpcap. */
+BOOL AirpcapGetDriverDecryptionState(PAirpcapHandle AdapterHandle,
+                                     PAirpcapDecryptionState PEnable)
+{
+    BOOL ret = FALSE;
+    if (AdapterHandle) {
+        if (PEnable) {
+            *PEnable = AIRPCAP_DECRYPTION_OFF;
+            ret = TRUE;
+        } else {
+            setebuf(AdapterHandle->last_error, "Invalid PEnable pointer.");
+        }
+    }
+    return ret;
+}
+BOOL AirpcapGetDecryptionState(PAirpcapHandle AdapterHandle,
+                               PAirpcapDecryptionState PEnable)
+{
+    return AirpcapGetDriverDecryptionState(AdapterHandle, PEnable);
+}
+
+BOOL AirpcapSetDriverDecryptionState(PAirpcapHandle AdapterHandle,
+                                     AirpcapDecryptionState Enable)
+{
+    BOOL ret = FALSE;
+    if (AdapterHandle) {
+        switch (Enable) {
+        case AIRPCAP_DECRYPTION_OFF:
+            ret = TRUE;
+            break;
+
+        case AIRPCAP_DECRYPTION_ON:
+            setebuf(AdapterHandle->last_error, "Hardware decryption is not supported.");
+            break;
+
+        default:
+            setebuf(AdapterHandle->last_error, "Invalid AirpcapDecryptionState passed.");
+            break;
+        }
+    }
+    return ret;
+}
+BOOL AirpcapSetDecryptionState(PAirpcapHandle AdapterHandle,
+                               AirpcapDecryptionState Enable)
+{
+    return AirpcapSetDriverDecryptionState(AdapterHandle, Enable);
+}
+
