@@ -355,9 +355,12 @@ int wiphy_match_handler(struct nl_msg *msg, void *data)
     /* TODO: how to figure this out from the driver?
      * Do we really need to fill this information in? */
     handle->cap.AdapterBus = AIRPCAP_BUS_PCI_EXPRESS;
-    /* How is this exposed in NL80211? */
-    handle->cap.CanTransmit = TRUE;
-    /* There is no way to set the transmit power in NL80211. */
+    /* Exposed through PF_PACKET sockets. ALL mac80211 drivers
+     * support injection.
+     * TODO: Set this to FALSE for now, since we do not implement
+     * AirpcapWrite(). */
+    handle->cap.CanTransmit = FALSE;
+    /* Not yet implemented - supported in NL80211_CMD_SET_WIPHY. */
     handle->cap.CanSetTransmitPower = FALSE;
     handle->cap.ExternalAntennaPlug = FALSE; // unknown
 
