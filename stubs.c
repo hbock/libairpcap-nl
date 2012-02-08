@@ -321,3 +321,15 @@ BOOL AirpcapGetDriverKeys(PAirpcapHandle AdapterHandle,
 {
     return AirpcapGetDeviceKeys(AdapterHandle, PKeysCollection, PKeysCollectionSize);
 }
+
+BOOL AirpcapWrite(PAirpcapHandle AdapterHandle,
+                  PCHAR TxPacket UNUSED,
+                  ULONG PacketLen UNUSED)
+{
+    if (AdapterHandle) {
+        setebuf(AdapterHandle->last_error,
+                "Transmit support not yet implemented. "
+                "Use pcap_inject() for now.");
+    }
+    return FALSE;
+}
