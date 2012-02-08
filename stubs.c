@@ -287,3 +287,37 @@ BOOL AirpcapSetDecryptionState(PAirpcapHandle AdapterHandle,
     return AirpcapSetDriverDecryptionState(AdapterHandle, Enable);
 }
 
+BOOL AirpcapSetDeviceKeys(PAirpcapHandle AdapterHandle,
+                          PAirpcapKeysCollection KeysCollection UNUSED)
+{
+    if (AdapterHandle) {
+        setebuf(AdapterHandle->last_error, "Decryption keys are not supported.");
+    }
+    return FALSE;
+}
+BOOL AirpcapSetDriverKeys(PAirpcapHandle AdapterHandle,
+                          PAirpcapKeysCollection KeysCollection UNUSED)
+{
+    if (AdapterHandle) {
+        setebuf(AdapterHandle->last_error, "Decryption keys are not supported.");
+    }
+    return FALSE;
+}
+BOOL AirpcapGetDeviceKeys(PAirpcapHandle AdapterHandle,
+                          PAirpcapKeysCollection PKeysCollection UNUSED,
+                          PUINT PKeysCollectionSize)
+{
+    if (AdapterHandle) {
+        setebuf(AdapterHandle->last_error, "Decryption keys are not supported.");
+        if (PKeysCollectionSize) {
+            *PKeysCollectionSize = 0;
+        }
+    }
+    return FALSE;
+}
+BOOL AirpcapGetDriverKeys(PAirpcapHandle AdapterHandle,
+                          PAirpcapKeysCollection PKeysCollection,
+                          PUINT PKeysCollectionSize)
+{
+    return AirpcapGetDeviceKeys(AdapterHandle, PKeysCollection, PKeysCollectionSize);
+}
