@@ -351,3 +351,11 @@ BOOL AirpcapSetTxPower(PAirpcapHandle AdapterHandle,
     }
     return FALSE;
 }
+
+BOOL AirpcapStoreCurConfigAsAdapterDefault(PAirpcapHandle AdapterHandle)
+{
+    if (AdapterHandle) {
+        setebuf(AdapterHandle->last_error, "Storing device configuration not yet supported.");
+    }
+    return FALSE;
+}
