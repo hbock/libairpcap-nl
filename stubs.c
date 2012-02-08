@@ -333,3 +333,21 @@ BOOL AirpcapWrite(PAirpcapHandle AdapterHandle,
     }
     return FALSE;
 }
+
+/* TODO: These can and will be implemented in a future revision. */
+BOOL AirpcapGetTxPower(PAirpcapHandle AdapterHandle,
+                       PUINT PPower UNUSED)
+{
+    if (AdapterHandle) {
+        setebuf(AdapterHandle->last_error, "Transmit power retreival is not yet supported.");
+    }
+    return FALSE;
+}
+BOOL AirpcapSetTxPower(PAirpcapHandle AdapterHandle,
+                       UINT Power UNUSED)
+{
+    if (AdapterHandle) {
+        setebuf(AdapterHandle->last_error, "Transmit power set is not yet supported.");
+    }
+    return FALSE;
+}
