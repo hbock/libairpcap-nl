@@ -816,7 +816,10 @@ PAirpcapHandle AirpcapOpen(PCHAR DeviceName, PCHAR Ebuf)
     }
     
     if (FALSE == AirpcapSetDeviceChannel(handle, 6)) {
-        strncpy(Ebuf, handle->last_error, AIRPCAP_ERRBUF_SIZE);
+        if (NULL != Ebuf) {
+            strncpy(Ebuf, handle->last_error, AIRPCAP_ERRBUF_SIZE);
+            Ebuf[AIRPCAP_ERRBUF_SIZE] = 0;
+        }
         AirpcapClose(handle);
         return NULL;
     }
