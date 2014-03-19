@@ -318,6 +318,7 @@ int wiphy_match_handler(struct nl_msg *msg, void *data)
         tb_band_freqs = tb_band[NL80211_BAND_ATTR_FREQS];
         nla_for_each_nested(nl_freq, tb_band_freqs, freq_rem) {
             PAirpcapChannelInfo info;
+            uint32_t max_tx_power;
 
             nla_parse(tb_freq, NL80211_FREQUENCY_ATTR_MAX,
                       nla_data(nl_freq),
@@ -333,6 +334,7 @@ int wiphy_match_handler(struct nl_msg *msg, void *data)
 
             frequency = nla_get_u32(tb_freq[NL80211_FREQUENCY_ATTR_FREQ]);
             
+
             info = &handle->channel_info[freq_count];
             info->Frequency = (UINT)frequency;
             /* TODO */
@@ -340,6 +342,9 @@ int wiphy_match_handler(struct nl_msg *msg, void *data)
             info->Flags = 0;
             /* Must be {0, 0} according to airpcap docs */
             memset(info->Reserved, 0, sizeof(info->Reserved));
+            info->_Private = (struct AirpcapAdapterChannelInfoPrivate *)malloc(sizeof(struct AirpcapAdapterChannelInfoPrivate));
+            info->_Private->max_tx_power = max_tx_power = nla_get_u32(tb_freq[NL80211_FREQUENCY_ATTR_MAX_TX_POWER]);
+
             freq_count++;
 
             /* Add SupportedBands based on parsed frequencies. */
@@ -360,8 +365,7 @@ int wiphy_match_handler(struct nl_msg *msg, void *data)
      * TODO: Set this to FALSE for now, since we do not implement
      * AirpcapWrite(). */
     handle->cap.CanTransmit = FALSE;
-    /* Not yet implemented - supported in NL80211_CMD_SET_WIPHY. */
-    handle->cap.CanSetTransmitPower = FALSE;
+    handle->cap.CanSetTransmitPower = TRUE;
     handle->cap.ExternalAntennaPlug = FALSE; // unknown
 
     /* Identify what kind of "Airpcap" we are by our existing
@@ -732,9 +736,16 @@ airpcap_handle_new(void)
 static void
 airpcap_handle_free(PAirpcapHandle handle)
 {
-    if (handle->channel_info)
+    if (NULL != handle->channel_info) {
+        UINT i;
+        for (i = 0; i < handle->channel_info_count; i++) {
+            free(handle->channel_info[i]._Private);
+            handle->channel_info[i]._Private = NULL;
+        }
         free(handle->channel_info);
-    
+        handle->channel_info = NULL;
+    }
+
     free(handle);
 }
 
@@ -852,7 +863,7 @@ PCHAR AirpcapGetLastError(PAirpcapHandle AdapterHandle)
 static PAirpcapDeviceDescription
 nl80211_get_all_devices(PCHAR Ebuf)
 {
-    int err;
+    int err = 0;
     struct nl_msg *msg;
     struct nl_handle *sock = NULL;
     struct nl_cache *cache;
@@ -864,17 +875,17 @@ nl80211_get_all_devices(PCHAR Ebuf)
      */
     if (NULL == sock) {
         setebuf(Ebuf, "Failed to allocate netlink socket.");
-        goto err;
+        goto Lerr;
     }
     /* Connect to the generic netlink.
      */
     if (genl_connect(sock)) {
         setebuf(Ebuf, "Failed to connect to generic netlink.");
-        goto err;
+        goto Lerr;
     }
     if (genl_ctrl_alloc_cache(sock, &cache)) {
         setebuf(Ebuf, "Failed to allocate generic netlink cache.");
-        goto err;
+        goto Lerr;
     }
 
     /* Find and get a reference to the nl80211 family.
@@ -882,13 +893,13 @@ nl80211_get_all_devices(PCHAR Ebuf)
     nl80211 = genl_ctrl_search_by_name(cache, "nl80211");
     if (NULL == nl80211) {
         setebuf(Ebuf, "Netlink module nl80211 not found.");
-        goto err;
+        goto Lerr;
     }
 
     msg = nlmsg_alloc();
     if (!msg) {
         setebuf(Ebuf, "Error allocating netlink message.");
-        goto err;
+        goto Lerr;
     }
 
     genlmsg_put(msg, NL_AUTO_PID, NL_AUTO_SEQ,
@@ -982,7 +993,7 @@ nl80211_get_all_devices(PCHAR Ebuf)
         iface = next;
     }
 
-err:
+Lerr:
     if (nl80211)
         genl_family_put(nl80211);
     if (cache)
@@ -1072,10 +1083,27 @@ BOOL AirpcapGetDeviceChannel(PAirpcapHandle AdapterHandle, PUINT PChannel)
     return ret;
 }
 
-static
-int cmd_set_channel_handler(struct nl_msg *msg UNUSED, void *data UNUSED)
+static int
+cmd_set_channel_handler(struct nl_msg *msg UNUSED, void *data UNUSED)
 {
     return NL_SKIP;
+}
+
+static UINT
+get_channel_max_tx_power(PAirpcapHandle adapter, UINT frequency)
+{
+    UINT max_tx_power = 0;
+
+    if (NULL != adapter) {
+        for (size_t i = 0; i < adapter->channel_info_count; i++) {
+            AirpcapChannelInfo *channel_info = &adapter->channel_info[i];
+            if (frequency == channel_info->Frequency) {
+                max_tx_power = channel_info->_Private->max_tx_power;
+            }
+        }
+    }
+
+    return max_tx_power;
 }
 
 BOOL AirpcapSetDeviceChannelEx(PAirpcapHandle AdapterHandle,
@@ -1088,9 +1116,12 @@ BOOL AirpcapSetDeviceChannelEx(PAirpcapHandle AdapterHandle,
  */
     BOOL ret = FALSE;
     if (AdapterHandle) {
-        int err;
+        int err = 0;
         uint32_t channel_type;
+        uint32_t max_tx_power;
         struct nl_msg *msg;
+
+        max_tx_power = get_channel_max_tx_power(AdapterHandle, ChannelInfo.Frequency);
 
         /* Select channel type for CMD_SET_CHANNEL, based
          * on the value in AirpcapChannelInfo.ExtChannel (-1, 0, 1). */
@@ -1124,10 +1155,12 @@ BOOL AirpcapSetDeviceChannelEx(PAirpcapHandle AdapterHandle,
                     0,//NLM_F_MATCH,
                     NL80211_CMD_SET_WIPHY, 0);
 
-        /* Set up CMD_SET_CHANNEL */
+        /* Set up CMD_SET_WIPHY */
         NLA_PUT_U32(msg, NL80211_ATTR_IFINDEX, AdapterHandle->ifindex);
         NLA_PUT_U32(msg, NL80211_ATTR_WIPHY_FREQ, ChannelInfo.Frequency);
         NLA_PUT_U32(msg, NL80211_ATTR_WIPHY_CHANNEL_TYPE, channel_type);
+        NLA_PUT_U32(msg, NL80211_ATTR_WIPHY_TX_POWER_SETTING, NL80211_TX_POWER_FIXED);
+        NLA_PUT_U32(msg, NL80211_ATTR_WIPHY_TX_POWER_LEVEL, max_tx_power);
 
         err = nl_send_and_recv(AdapterHandle->nl_socket, msg,
                                cmd_set_channel_handler, NULL);
@@ -1139,6 +1172,7 @@ BOOL AirpcapSetDeviceChannelEx(PAirpcapHandle AdapterHandle,
         } else {
             /* Save current channel state for GetChannel(Ex). */
             memcpy(&AdapterHandle->current_channel, &ChannelInfo, sizeof(AirpcapChannelInfo));
+            AdapterHandle->current_tx_power = max_tx_power;
             ret = TRUE;
         }
     }
@@ -1299,4 +1333,86 @@ BOOL AirpcapConvertChannelToFrequency(UINT Channel,
         }
     }
     return FALSE;
+}
+
+static BOOL
+nl80211_set_tx_power(PAirpcapHandle adapter, UINT tx_power_level)
+{
+    BOOL ret = FALSE;
+
+    if (NULL != adapter) {
+        int err = 0;
+        struct nl_msg *msg;
+
+        msg = nlmsg_alloc();
+        if (NULL == msg) {
+            setebuf(adapter->last_error, "Error allocating driver message.");
+            return FALSE;
+        }
+
+        genlmsg_put(msg, 0, 0,//NL_AUTO_PID, NL_AUTO_SEQ,
+                genl_family_get_id(adapter->nl80211), 0,
+                0,//NLM_F_MATCH,
+                NL80211_CMD_SET_WIPHY, 0);
+
+        /* Set up CMD_SET_WIPHY */
+        NLA_PUT_U32(msg, NL80211_ATTR_IFINDEX, adapter->ifindex);
+        NLA_PUT_U32(msg, NL80211_ATTR_WIPHY_TX_POWER_SETTING, NL80211_TX_POWER_FIXED);
+        NLA_PUT_U32(msg, NL80211_ATTR_WIPHY_TX_POWER_LEVEL, tx_power_level);
+
+        err = nl_send_and_recv(adapter->nl_socket, msg, cmd_set_channel_handler, NULL);
+
+        if (err < 0) {
+            nla_put_failure:
+            setebuf(adapter->last_error, "Set TX power failed: %s", strerror(-err));
+            ret = FALSE;
+        } else {
+            /* Save current channel state for GetChannel(Ex). */
+            adapter->current_tx_power = tx_power_level;
+            ret = TRUE;
+        }
+    }
+
+    return ret;
+}
+
+BOOL AirpcapSetTxPower(PAirpcapHandle AdapterHandle, UINT Power)
+{
+    BOOL retval = FALSE;
+
+    if (NULL != AdapterHandle) {
+        /* find max TX power for the current channel. */
+        UINT max_tx_power = get_channel_max_tx_power(
+                AdapterHandle, AdapterHandle->current_channel.Frequency
+        );
+        if (0 != max_tx_power) {
+            /* Power set to 0 sets the max TX power. */
+            if (0 == Power) {
+                Power = max_tx_power;
+            } else if (Power > max_tx_power) {
+                setebuf(AdapterHandle->last_error,
+                        "TX power is specified is higher than the "
+                        "adapter's max transmit power.");
+            } else {
+                retval = nl80211_set_tx_power(AdapterHandle, Power);
+            }
+        } else {
+            setebuf(AdapterHandle->last_error,
+                    "Could not find current channel's max transmit power.");
+        }
+    }
+
+    return retval;
+}
+
+BOOL AirpcapGetTxPower(PAirpcapHandle AdapterHandle, PUINT PPower)
+{
+    BOOL ret = FALSE;
+
+    if (NULL != AdapterHandle && NULL != PPower) {
+        *PPower = AdapterHandle->current_tx_power;
+        ret = TRUE;
+    }
+
+    return ret;
 }

@@ -6,7 +6,7 @@
 /** STUB FUNCTION.  We have no concept of kernel buffers
  * for drivers.
  */
-BOOL AirpcapSetKernelBuffer(PAirpcapHandle AdapterHandle UNUSED,
+BOOL AirpcapSetKernelBuffer(PAirpcapHandle AdapterHandle,
                             UINT BufferSize UNUSED)
 {
     BOOL ret = FALSE;
@@ -21,7 +21,7 @@ BOOL AirpcapSetKernelBuffer(PAirpcapHandle AdapterHandle UNUSED,
  * we pretend it is the default expected Airpcap size,
  * 1 Mbyte.
  */
-BOOL AirpcapGetKernelBufferSize(PAirpcapHandle AdapterHandle UNUSED,
+BOOL AirpcapGetKernelBufferSize(PAirpcapHandle AdapterHandle,
                                 PUINT PSizeBytes)
 {
     BOOL ret = FALSE;
@@ -37,7 +37,7 @@ BOOL AirpcapGetKernelBufferSize(PAirpcapHandle AdapterHandle UNUSED,
 
 /** STUB function:
  * return TRUE unless AdapterHandle is NULL. */
-BOOL AirpcapSetMinToCopy(PAirpcapHandle AdapterHandle UNUSED,
+BOOL AirpcapSetMinToCopy(PAirpcapHandle AdapterHandle,
                          UINT MinToCopy UNUSED)
 {
     BOOL ret = FALSE;
@@ -330,24 +330,6 @@ BOOL AirpcapWrite(PAirpcapHandle AdapterHandle,
         setebuf(AdapterHandle->last_error,
                 "Transmit support not yet implemented. "
                 "Use pcap_inject() for now.");
-    }
-    return FALSE;
-}
-
-/* TODO: These can and will be implemented in a future revision. */
-BOOL AirpcapGetTxPower(PAirpcapHandle AdapterHandle,
-                       PUINT PPower UNUSED)
-{
-    if (AdapterHandle) {
-        setebuf(AdapterHandle->last_error, "Transmit power retreival is not yet supported.");
-    }
-    return FALSE;
-}
-BOOL AirpcapSetTxPower(PAirpcapHandle AdapterHandle,
-                       UINT Power UNUSED)
-{
-    if (AdapterHandle) {
-        setebuf(AdapterHandle->last_error, "Transmit power set is not yet supported.");
     }
     return FALSE;
 }

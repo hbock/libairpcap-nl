@@ -80,11 +80,16 @@ struct _AirpcapHandle {
     AirpcapChannelInfo *channel_info;
     UINT channel_info_count;
 
+    UINT current_tx_power;
     AirpcapChannelInfo current_channel;
     AirpcapValidationType validation;
 };
 
 #define UNUSED __attribute__((unused))
+
+struct AirpcapAdapterChannelInfoPrivate {
+	uint32_t max_tx_power; /* nl80211 uses units of mBm (100 * dBm value) */
+};
 
 /* From CACE airpcap-int.h.
  * Somewhat ugly, but better than re-inventing the

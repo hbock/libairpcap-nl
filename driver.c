@@ -120,12 +120,45 @@ void test(PCHAR name)
             printf("AirpcapGetDeviceChannelEx did not return channel 6 on Open - bug?\n");
         }
     }
+
+    UINT power;
+    if (FALSE == AirpcapGetTxPower(handle, &power)) {
+    	printf("Error getting current TX power: %s\n", AirpcapGetLastError(handle));
+    } else {
+    	printf("AirpcapGetTxPower() => %u mBm\n", power);
+    }
+
     chaninfo.Frequency = 2422;
     chaninfo.ExtChannel = 0;
     chaninfo.Flags = 0;
     
     if (FALSE == AirpcapSetDeviceChannelEx(handle, chaninfo)) {
         printf("AirpcapSetDeviceChannelEx failed: %s", AirpcapGetLastError(handle));
+    } else {
+    	printf("AirpcapSetDeviceChannelEx() OK - new freq = %u MHz\n", chaninfo.Frequency);
+    }
+
+    if (FALSE == AirpcapGetTxPower(handle, &power)) {
+    	printf("Error getting current TX power: %s\n", AirpcapGetLastError(handle));
+    } else {
+    	printf("AirpcapGetTxPower() => %u mBm\n", power);
+    }
+
+    UINT newPower = 1300;
+    if (FALSE == AirpcapSetTxPower(handle, newPower)) {
+        printf("Error setting TX power to %u mBm: %s\n",
+                newPower, AirpcapGetLastError(handle));
+    } else {
+        printf("AirpcapSetTxPower(%u) OK!\n", newPower);
+        if (FALSE == AirpcapGetTxPower(handle, &power)) {
+            printf("Error getting current TX power: %s\n", AirpcapGetLastError(handle));
+        } else {
+            printf("AirpcapGetTxPower() => %u mBm\n", power);
+            if (newPower != power) {
+                printf("** Error: AirpcapGetTxPower() returned %u, "
+                       "but AirpcapSetTxPower(%u) succeeded??", power, newPower);
+            }
+        }
     }
 
     AirpcapValidationType validation;

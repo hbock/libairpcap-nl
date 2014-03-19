@@ -56,6 +56,8 @@ Supported calls (with some caveats):
  - AirpcapConvertFrequencyToChannel
  - AirpcapConvertChannelToFrequency
  - AirpcapGetMacAddress
+ - AirpcapSetTxPower
+ - AirpcapGetTxPower
 
 Stubbed calls:
 
@@ -102,10 +104,6 @@ Stubbed calls:
 
 Stubbed, but will eventually be supported:
  
- - AirpcapSetTxPower
- - AirpcapGetTxPower
-   - Can be implemented fairly easily when I have time.
-
  - AirpcapSetMacAddress
    - Easily implemented.
 

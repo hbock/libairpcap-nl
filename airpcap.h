@@ -292,6 +292,7 @@ typedef struct _AirpcapChannelInfo
 	CHAR ExtChannel;
 	UCHAR Flags;		///< Channel Flags. The only flag supported at this time is \ref AIRPCAP_CIF_TX_ENABLED.
 	UCHAR Reserved[2];	///< Reserved. It should be set to {0,0}.
+	struct AirpcapAdapterChannelInfoPrivate *_Private; ///< Reserved.
 }
 AirpcapChannelInfo, *PAirpcapChannelInfo;
 
