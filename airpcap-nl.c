@@ -866,8 +866,8 @@ nl80211_get_all_devices(PCHAR Ebuf)
     int err = 0;
     struct nl_msg *msg;
     struct nl_handle *sock = NULL;
-    struct nl_cache *cache;
-    struct genl_family *nl80211;
+    struct nl_cache *cache = NULL;
+    struct genl_family *nl80211 = NULL;
     PAirpcapDeviceDescription desc_start = NULL, desc_current;
 
     sock = nl_handle_alloc();
